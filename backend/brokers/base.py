@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import List, Optional, Callable, Any
+from dataclasses import dataclass, field
+from typing import List, Optional, Callable, Any, Dict, Type
 from decimal import Decimal
 from datetime import datetime
 from enum import Enum
@@ -75,6 +75,47 @@ class MarketQuote:
     bid_qty: int
     ask_qty: int
     timestamp: datetime
+
+
+@dataclass
+class BrokerCapabilities:
+    """Broker capability flags."""
+    trading: bool = True
+    market_data: bool = True
+    historical_data: bool = False
+    streaming: bool = False
+    options: bool = False
+    futures: bool = False
+    equity: bool = True
+    commodities: bool = False
+    currency: bool = False
+
+
+@dataclass
+class BrokerAuthConfig:
+    """Authentication configuration for a broker."""
+    auth_type: str  # "oauth", "api_key", "totp"
+    requires_api_key: bool = True
+    requires_api_secret: bool = True
+    requires_totp: bool = False
+    token_expiry_hours: int = 24
+    oauth_auth_url: Optional[str] = None
+    oauth_token_url: Optional[str] = None
+
+
+@dataclass
+class BrokerMetadata:
+    """Plugin metadata for a broker."""
+    name: str
+    display_name: str
+    version: str
+    description: str
+    capabilities: BrokerCapabilities
+    auth_config: BrokerAuthConfig
+    exchanges: List[str]
+    symbol_format: str
+    logo_url: Optional[str] = None
+    config_schema: Dict[str, Any] = field(default_factory=dict)
 
 
 class BaseBroker(ABC):
@@ -288,3 +329,89 @@ class BaseBroker(ABC):
             List of OHLC candles
         """
         raise NotImplementedError("get_historical_data not implemented for this broker")
+
+    # ==================== Plugin System Methods ====================
+
+    @classmethod
+    def get_metadata(cls) -> BrokerMetadata:
+        """
+        Return broker plugin metadata.
+
+        This method should be overridden by broker plugins loaded from plugin.json.
+        For brokers not using the plugin system, this returns a default metadata.
+
+        Returns:
+            BrokerMetadata with broker information
+        """
+        return BrokerMetadata(
+            name=cls.name.lower().replace(" ", "_"),
+            display_name=cls.name,
+            version="1.0.0",
+            description=f"{cls.name} broker integration",
+            capabilities=BrokerCapabilities(),
+            auth_config=BrokerAuthConfig(auth_type="api_key"),
+            exchanges=[],
+            symbol_format="{exchange}:{symbol}",
+        )
+
+    @classmethod
+    def generate_auth_url(cls, config: Dict[str, Any], state: str) -> Optional[str]:
+        """
+        Generate OAuth authorization URL.
+
+        Override this method for OAuth-based brokers.
+
+        Args:
+            config: Broker configuration (app_id, redirect_uri, etc.)
+            state: State parameter for OAuth (usually user_id)
+
+        Returns:
+            Authorization URL or None if OAuth not supported
+        """
+        return None
+
+    @classmethod
+    async def exchange_auth_code(
+        cls, config: Dict[str, Any], auth_code: str
+    ) -> Dict[str, Any]:
+        """
+        Exchange authorization code for access token.
+
+        Override this method for OAuth-based brokers.
+
+        Args:
+            config: Broker configuration
+            auth_code: Authorization code from OAuth callback
+
+        Returns:
+            Dictionary with access_token and optionally refresh_token
+
+        Raises:
+            NotImplementedError: If OAuth not supported
+        """
+        raise NotImplementedError("OAuth not supported for this broker")
+
+    def normalize_symbol(self, broker_symbol: str) -> str:
+        """
+        Convert broker-specific symbol to normalized format.
+
+        Args:
+            broker_symbol: Symbol in broker's format
+
+        Returns:
+            Normalized symbol (e.g., "RELIANCE")
+        """
+        return broker_symbol
+
+    def denormalize_symbol(self, symbol: str, exchange: str) -> str:
+        """
+        Convert normalized symbol to broker-specific format.
+
+        Args:
+            symbol: Normalized symbol
+            exchange: Exchange code
+
+        Returns:
+            Symbol in broker's format (e.g., "NSE:RELIANCE-EQ")
+        """
+        return f"{exchange}:{symbol}"

@@ -1,0 +1,56 @@
+{
+  "name": "fyers",
+  "display_name": "Fyers",
+  "version": "1.0.0",
+  "description": "Fyers trading broker integration with OAuth authentication. Supports equity, F&O, and currency trading on NSE, BSE, NFO, MCX, and CDS exchanges.",
+  "broker_class": "broker.FyersBroker",
+  "auth": {
+    "type": "oauth",
+    "oauth_config": {
+      "auth_url": "https://api-t1.fyers.in/api/v3/generate-authcode",
+      "token_url": "https://api-t1.fyers.in/api/v3/validate-authcode"
+    },
+    "requires_api_key": true,
+    "requires_api_secret": true,
+    "requires_totp": false,
+    "token_expiry_hours": 12
+  },
+  "capabilities": {
+    "trading": true,
+    "market_data": true,
+    "historical_data": true,
+    "streaming": true,
+    "options": true,
+    "futures": true,
+    "equity": true,
+    "commodities": false,
+    "currency": true
+  },
+  "exchanges": ["NSE", "BSE", "NFO", "MCX", "CDS"],
+  "symbol_format": "{exchange}:{symbol}",
+  "logo_url": "/assets/brokers/fyers.png",
+  "config_schema": {
+    "app_id": {
+      "type": "string",
+      "required": true,
+      "env_var": "FYERS_APP_ID",
+      "label": "App ID",
+      "description": "Fyers API App ID"
+    },
+    "secret_key": {
+      "type": "string",
+      "required": true,
+      "env_var": "FYERS_SECRET_KEY",
+      "label": "Secret Key",
+      "description": "Fyers API Secret Key",
+      "sensitive": true
+    },
+    "redirect_uri": {
+      "type": "string",
+      "required": true,
+      "env_var": "FYERS_REDIRECT_URI",
+      "label": "Redirect URI",
+      "description": "OAuth callback URL"
+    }
+  }
+}
