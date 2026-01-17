@@ -11,6 +11,10 @@ import {
   TrendingUp,
   BarChart3,
   Zap,
+  Copy,
+  ExternalLink,
+  Key,
+  Info,
 } from 'lucide-react'
 import { brokerApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -56,6 +60,13 @@ interface ConnectionStatus {
   needs_refresh: boolean
 }
 
+interface CredentialsStatus {
+  broker: string
+  has_credentials: boolean
+  is_connected: boolean
+  redirect_uri: string
+}
+
 export default function BrokerPage() {
   const searchParams = useSearchParams()
   const [brokers, setBrokers] = useState<BrokerInfo[]>([])
@@ -64,11 +75,18 @@ export default function BrokerPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [connectingBroker, setConnectingBroker] = useState<string | null>(null)
 
-  // API Key form state
+  // API Key form state (for non-OAuth brokers)
   const [showApiKeyForm, setShowApiKeyForm] = useState(false)
   const [apiKey, setApiKey] = useState('')
   const [apiSecret, setApiSecret] = useState('')
   const [totp, setTotp] = useState('')
+
+  // OAuth credentials form state (for OAuth brokers like Fyers)
+  const [showOAuthCredentialsForm, setShowOAuthCredentialsForm] = useState(false)
+  const [oauthAppId, setOauthAppId] = useState('')
+  const [oauthSecretKey, setOauthSecretKey] = useState('')
+  const [credentialsStatus, setCredentialsStatus] = useState<CredentialsStatus | null>(null)
+  const [savingCredentials, setSavingCredentials] = useState(false)
 
   useEffect(() => {
     fetchBrokers()
@@ -123,33 +141,87 @@ export default function BrokerPage() {
       const details = await brokerApi.getInfo(brokerName)
       setSelectedBroker(details)
       setShowApiKeyForm(false)
+      setShowOAuthCredentialsForm(false)
       setApiKey('')
       setApiSecret('')
       setTotp('')
+      setOauthAppId('')
+      setOauthSecretKey('')
+
+      // For OAuth brokers, fetch credentials status
+      if (details.auth_type === 'oauth') {
+        try {
+          const status = await brokerApi.getCredentialsStatus(brokerName)
+          setCredentialsStatus(status)
+        } catch {
+          setCredentialsStatus(null)
+        }
+      }
     } catch {
       toast.error('Failed to load broker details')
+    }
+  }
+
+  const handleSaveOAuthCredentials = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedBroker) return
+
+    setSavingCredentials(true)
+
+    try {
+      const result = await brokerApi.saveCredentials(selectedBroker.name, {
+        app_id: oauthAppId,
+        secret_key: oauthSecretKey,
+      })
+
+      toast.success('Credentials saved successfully')
+
+      // Update credentials status
+      setCredentialsStatus({
+        broker: selectedBroker.name,
+        has_credentials: true,
+        is_connected: false,
+        redirect_uri: result.redirect_uri,
+      })
+
+      setShowOAuthCredentialsForm(false)
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to save credentials')
+    } finally {
+      setSavingCredentials(false)
     }
   }
 
   const handleConnect = async () => {
     if (!selectedBroker) return
 
-    setConnectingBroker(selectedBroker.name)
+    if (selectedBroker.auth_type === 'oauth') {
+      // Check if credentials are saved
+      if (!credentialsStatus?.has_credentials) {
+        // Show credentials form first
+        setShowOAuthCredentialsForm(true)
+        return
+      }
 
-    try {
-      if (selectedBroker.auth_type === 'oauth') {
-        // OAuth flow - redirect to broker
+      // Credentials are saved, proceed with OAuth
+      setConnectingBroker(selectedBroker.name)
+
+      try {
         const { auth_url } = await brokerApi.getLoginUrl(selectedBroker.name)
         window.location.href = auth_url
-      } else {
-        // API key flow
-        setShowApiKeyForm(true)
+      } catch (error: any) {
+        toast.error(error.response?.data?.detail || 'Failed to initiate connection')
         setConnectingBroker(null)
       }
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to initiate connection')
-      setConnectingBroker(null)
+    } else {
+      // API key flow for non-OAuth brokers
+      setShowApiKeyForm(true)
     }
+  }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    toast.success('Copied to clipboard')
   }
 
   const handleApiKeySubmit = async (e: React.FormEvent) => {
@@ -330,8 +402,146 @@ export default function BrokerPage() {
                 <span>Token valid for {selectedBroker.token_expiry_hours} hours</span>
               </div>
 
-              {/* API Key Form */}
-              {showApiKeyForm ? (
+              {/* OAuth Credentials Form (for brokers like Fyers) */}
+              {showOAuthCredentialsForm && selectedBroker.auth_type === 'oauth' ? (
+                <form onSubmit={handleSaveOAuthCredentials} className="space-y-4">
+                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg mb-4">
+                    <div className="flex items-start gap-2">
+                      <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <div className="text-sm text-blue-800 dark:text-blue-300">
+                        <p className="font-medium mb-1">Setup Instructions:</p>
+                        <ol className="list-decimal list-inside space-y-1 text-xs">
+                          <li>Create an app in your {selectedBroker.display_name} developer portal</li>
+                          <li>Enter your APP ID and Secret Key below</li>
+                          <li>Copy the Redirect URI and add it to your app settings</li>
+                          <li>Click Connect to authorize</li>
+                        </ol>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">APP ID</label>
+                    <input
+                      type="text"
+                      value={oauthAppId}
+                      onChange={(e) => setOauthAppId(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter your APP ID"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Secret Key</label>
+                    <input
+                      type="password"
+                      value={oauthSecretKey}
+                      onChange={(e) => setOauthSecretKey(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter your Secret Key"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowOAuthCredentialsForm(false)}
+                      className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={savingCredentials}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {savingCredentials ? (
+                        <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                      ) : (
+                        'Save Credentials'
+                      )}
+                    </button>
+                  </div>
+                </form>
+              ) : /* Credentials saved - Show Redirect URI and Connect */
+              credentialsStatus?.has_credentials && selectedBroker.auth_type === 'oauth' && !connections[selectedBroker.name]?.connected ? (
+                <div className="space-y-4">
+                  {/* Credentials Status */}
+                  <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                    <Check className="h-5 w-5 text-green-600" />
+                    <span className="text-green-800 dark:text-green-400 font-medium text-sm">
+                      API credentials saved
+                    </span>
+                    <button
+                      onClick={() => setShowOAuthCredentialsForm(true)}
+                      className="ml-auto text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                    >
+                      Edit
+                    </button>
+                  </div>
+
+                  {/* Redirect URI Section */}
+                  <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                    <div className="flex items-start gap-2 mb-3">
+                      <Key className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="font-medium text-amber-800 dark:text-amber-300 text-sm">
+                          Configure Redirect URI
+                        </p>
+                        <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                          Add this URL in your {selectedBroker.display_name} app settings:
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 px-3 py-2 text-xs bg-white dark:bg-gray-800 rounded border border-amber-300 dark:border-amber-700 text-gray-800 dark:text-gray-200 break-all">
+                        {credentialsStatus.redirect_uri}
+                      </code>
+                      <button
+                        onClick={() => copyToClipboard(credentialsStatus.redirect_uri)}
+                        className="p-2 text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/40 rounded"
+                        title="Copy to clipboard"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <a
+                      href="https://myapi.fyers.in/dashboard"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 mt-3 text-xs text-amber-700 dark:text-amber-400 hover:underline"
+                    >
+                      Open Fyers API Dashboard
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+
+                  {/* Connect Button */}
+                  <button
+                    onClick={handleConnect}
+                    disabled={connectingBroker === selectedBroker.name}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {connectingBroker === selectedBroker.name ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Connecting...
+                      </>
+                    ) : (
+                      <>
+                        <Link2 className="h-4 w-4" />
+                        Connect to {selectedBroker.display_name}
+                      </>
+                    )}
+                  </button>
+
+                  <p className="text-xs text-gray-500 text-center">
+                    Make sure you&apos;ve configured the Redirect URI in your broker app before connecting.
+                  </p>
+                </div>
+              ) : /* API Key Form (for non-OAuth brokers) */
+              showApiKeyForm ? (
                 <form onSubmit={handleApiKeySubmit} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">API Key</label>

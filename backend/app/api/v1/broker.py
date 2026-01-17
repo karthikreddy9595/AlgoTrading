@@ -83,6 +83,28 @@ class ApiKeyConnectionRequest(BaseModel):
     totp: Optional[str] = None
 
 
+class BrokerCredentialsRequest(BaseModel):
+    """Request for saving OAuth broker credentials (APP_ID and Secret Key)."""
+
+    app_id: str
+    secret_key: str
+
+
+class BrokerCredentialsResponse(BaseModel):
+    """Response after saving broker credentials."""
+
+    message: str
+    redirect_uri: str
+    credentials_saved: bool
+
+
+class BrokerRedirectUriResponse(BaseModel):
+    """Response containing the redirect URI for broker configuration."""
+
+    broker: str
+    redirect_uri: str
+
+
 # ==================== List Available Brokers ====================
 
 
@@ -143,6 +165,131 @@ async def get_broker_info(broker_name: str):
     )
 
 
+# ==================== Broker Credentials Management ====================
+
+
+@router.get("/{broker_name}/redirect-uri", response_model=BrokerRedirectUriResponse)
+async def get_broker_redirect_uri(broker_name: str):
+    """
+    Get the redirect URI that users need to configure in their broker's developer portal.
+    """
+    metadata = broker_registry.get_metadata(broker_name)
+    if not metadata:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Broker '{broker_name}' not found",
+        )
+
+    redirect_uri = _get_redirect_uri(broker_name)
+    if not redirect_uri:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Redirect URI not configured for {broker_name}",
+        )
+
+    return BrokerRedirectUriResponse(
+        broker=broker_name,
+        redirect_uri=redirect_uri,
+    )
+
+
+@router.post("/{broker_name}/save-credentials", response_model=BrokerCredentialsResponse)
+async def save_broker_credentials(
+    broker_name: str,
+    credentials: BrokerCredentialsRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Save user's broker API credentials (APP_ID and Secret Key).
+    This must be done before initiating OAuth login.
+    Returns the redirect URI that user needs to configure in their broker's developer portal.
+    """
+    metadata = broker_registry.get_metadata(broker_name)
+    if not metadata:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Broker '{broker_name}' not found",
+        )
+
+    if metadata.auth_config.auth_type != "oauth":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Broker '{broker_name}' does not use OAuth. Use the connect endpoint instead.",
+        )
+
+    # Validate credentials are not empty
+    if not credentials.app_id or not credentials.secret_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="APP ID and Secret Key are required",
+        )
+
+    # Upsert broker connection with credentials (without access_token yet)
+    result = await db.execute(
+        select(BrokerConnection).where(
+            BrokerConnection.user_id == current_user.id,
+            BrokerConnection.broker == broker_name,
+        )
+    )
+    connection = result.scalar_one_or_none()
+
+    if connection:
+        connection.api_key = credentials.app_id
+        connection.api_secret = credentials.secret_key
+        connection.updated_at = datetime.utcnow()
+        # Keep is_active as False until OAuth is complete
+        if not connection.access_token:
+            connection.is_active = False
+    else:
+        connection = BrokerConnection(
+            user_id=current_user.id,
+            broker=broker_name,
+            api_key=credentials.app_id,
+            api_secret=credentials.secret_key,
+            is_active=False,  # Will be activated after OAuth completes
+        )
+        db.add(connection)
+
+    await db.commit()
+
+    redirect_uri = _get_redirect_uri(broker_name)
+
+    return BrokerCredentialsResponse(
+        message=f"Credentials saved for {broker_name}. Please configure the redirect URI in your broker's developer portal.",
+        redirect_uri=redirect_uri,
+        credentials_saved=True,
+    )
+
+
+@router.get("/{broker_name}/credentials-status")
+async def get_credentials_status(
+    broker_name: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Check if user has saved their broker credentials.
+    """
+    result = await db.execute(
+        select(BrokerConnection).where(
+            BrokerConnection.user_id == current_user.id,
+            BrokerConnection.broker == broker_name,
+        )
+    )
+    connection = result.scalar_one_or_none()
+
+    has_credentials = connection is not None and connection.api_key and connection.api_secret
+    is_connected = connection is not None and connection.is_active and connection.access_token
+
+    return {
+        "broker": broker_name,
+        "has_credentials": has_credentials,
+        "is_connected": is_connected,
+        "redirect_uri": _get_redirect_uri(broker_name),
+    }
+
+
 # ==================== OAuth Flow (Generic) ====================
 
 
@@ -150,10 +297,12 @@ async def get_broker_info(broker_name: str):
 async def broker_oauth_login(
     broker_name: str,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Initiate OAuth login for any broker.
     Returns the authorization URL to redirect the user to.
+    User must have saved their credentials first via /save-credentials endpoint.
     """
     metadata = broker_registry.get_metadata(broker_name)
     if not metadata:
@@ -168,16 +317,29 @@ async def broker_oauth_login(
             detail=f"Broker '{broker_name}' does not support OAuth. Use API key authentication.",
         )
 
-    # Get broker config from settings
-    config = _get_broker_config(broker_name)
+    # Get user's stored credentials from database
+    result = await db.execute(
+        select(BrokerConnection).where(
+            BrokerConnection.user_id == current_user.id,
+            BrokerConnection.broker == broker_name,
+        )
+    )
+    connection = result.scalar_one_or_none()
 
-    if not config:
+    if not connection or not connection.api_key or not connection.api_secret:
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Broker '{broker_name}' is not configured on this server",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please save your API credentials first using the Save Credentials option.",
         )
 
-    # Generate auth URL
+    # Build config from user's stored credentials
+    config = {
+        "app_id": connection.api_key,
+        "secret_key": connection.api_secret,
+        "redirect_uri": _get_redirect_uri(broker_name),
+    }
+
+    # Generate auth URL using user's credentials
     auth_url = BrokerFactory.get_auth_url(
         broker_name,
         config,
@@ -187,7 +349,7 @@ async def broker_oauth_login(
     if not auth_url:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"OAuth not configured for {broker_name}",
+            detail=f"Failed to generate OAuth URL for {broker_name}",
         )
 
     return {"auth_url": auth_url}
@@ -206,25 +368,26 @@ async def broker_oauth_callback(
     """
     Handle OAuth callback for any broker.
     Exchanges auth code for access token and stores the connection.
+    Uses user's stored credentials (APP_ID and Secret Key) for token exchange.
     """
     authorization_code = auth_code or code
+    frontend_url = (
+        settings.CORS_ORIGINS[0] if settings.CORS_ORIGINS else "http://localhost:3000"
+    )
 
     if not authorization_code:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Authorization code not provided",
+        return RedirectResponse(
+            url=f"{frontend_url}/dashboard/broker?broker={broker_name}&status=error&message=Authorization code not provided"
         )
 
     if s == "error":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Authorization failed",
+        return RedirectResponse(
+            url=f"{frontend_url}/dashboard/broker?broker={broker_name}&status=error&message=Authorization failed"
         )
 
     if not state:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="State parameter missing",
+        return RedirectResponse(
+            url=f"{frontend_url}/dashboard/broker?broker={broker_name}&status=error&message=State parameter missing"
         )
 
     # Verify user exists
@@ -232,16 +395,33 @@ async def broker_oauth_callback(
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid state parameter",
+        return RedirectResponse(
+            url=f"{frontend_url}/dashboard/broker?broker={broker_name}&status=error&message=Invalid state parameter"
         )
 
     try:
-        # Get broker config
-        config = _get_broker_config(broker_name)
+        # Get user's stored credentials from database
+        result = await db.execute(
+            select(BrokerConnection).where(
+                BrokerConnection.user_id == user.id,
+                BrokerConnection.broker == broker_name,
+            )
+        )
+        connection = result.scalar_one_or_none()
 
-        # Exchange code for token
+        if not connection or not connection.api_key or not connection.api_secret:
+            return RedirectResponse(
+                url=f"{frontend_url}/dashboard/broker?broker={broker_name}&status=error&message=Credentials not found. Please save your API credentials first."
+            )
+
+        # Build config from user's stored credentials
+        config = {
+            "app_id": connection.api_key,
+            "secret_key": connection.api_secret,
+            "redirect_uri": _get_redirect_uri(broker_name),
+        }
+
+        # Exchange code for token using user's credentials
         token_data = await BrokerFactory.exchange_token(
             broker_name,
             config,
@@ -256,47 +436,20 @@ async def broker_oauth_callback(
         metadata = broker_registry.get_metadata(broker_name)
         expiry_hours = metadata.auth_config.token_expiry_hours if metadata else 12
 
-        # Upsert broker connection
-        result = await db.execute(
-            select(BrokerConnection).where(
-                BrokerConnection.user_id == user.id,
-                BrokerConnection.broker == broker_name,
-            )
-        )
-        connection = result.scalar_one_or_none()
-
-        if connection:
-            connection.access_token = access_token
-            connection.api_key = config.get("app_id", config.get("api_key", ""))
-            connection.token_expiry = datetime.utcnow() + timedelta(hours=expiry_hours)
-            connection.is_active = True
-            connection.updated_at = datetime.utcnow()
-        else:
-            connection = BrokerConnection(
-                user_id=user.id,
-                broker=broker_name,
-                api_key=config.get("app_id", config.get("api_key", "")),
-                access_token=access_token,
-                token_expiry=datetime.utcnow() + timedelta(hours=expiry_hours),
-                is_active=True,
-            )
-            db.add(connection)
+        # Update connection with access token
+        connection.access_token = access_token
+        connection.token_expiry = datetime.utcnow() + timedelta(hours=expiry_hours)
+        connection.is_active = True
+        connection.updated_at = datetime.utcnow()
 
         await db.commit()
 
-        # Redirect to frontend
-        frontend_url = (
-            settings.CORS_ORIGINS[0] if settings.CORS_ORIGINS else "http://localhost:3000"
-        )
         return RedirectResponse(
             url=f"{frontend_url}/dashboard/broker?broker={broker_name}&status=success"
         )
 
     except Exception as e:
         print(f"OAuth error for {broker_name}: {e}")
-        frontend_url = (
-            settings.CORS_ORIGINS[0] if settings.CORS_ORIGINS else "http://localhost:3000"
-        )
         return RedirectResponse(
             url=f"{frontend_url}/dashboard/broker?broker={broker_name}&status=error&message={str(e)}"
         )
@@ -459,6 +612,7 @@ async def get_broker_profile(
 ):
     """
     Get broker profile and account information.
+    Uses user's stored credentials.
     """
     result = await db.execute(
         select(BrokerConnection).where(
@@ -476,14 +630,14 @@ async def get_broker_profile(
         )
 
     try:
-        config = _get_broker_config(broker_name)
+        # Use user's stored credentials (api_key = APP_ID)
         broker = await BrokerFactory.create_and_connect(
             broker_name,
             {
                 "api_key": connection.api_key,
                 "api_secret": connection.api_secret,
                 "access_token": connection.access_token,
-                "client_id": config.get("app_id", connection.api_key),
+                "client_id": connection.api_key,  # Use user's APP_ID
             },
         )
 
@@ -519,8 +673,22 @@ async def get_broker_profile(
 # ==================== Helper Functions ====================
 
 
+def _get_redirect_uri(broker_name: str) -> str:
+    """Get the redirect URI for a broker. This is server-controlled."""
+    redirect_uri_mapping = {
+        "fyers": settings.FYERS_REDIRECT_URI,
+        # Add more brokers here as they are added
+        # "zerodha": settings.ZERODHA_REDIRECT_URI,
+    }
+    return redirect_uri_mapping.get(broker_name, "")
+
+
 def _get_broker_config(broker_name: str) -> dict:
-    """Get broker configuration from settings based on broker name."""
+    """
+    Get broker configuration from settings based on broker name.
+    Note: This is now only used for server-level config like redirect_uri.
+    User credentials (app_id, secret_key) should be fetched from BrokerConnection.
+    """
     config_mapping = {
         "fyers": {
             "app_id": settings.FYERS_APP_ID,

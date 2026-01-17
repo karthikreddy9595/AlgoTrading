@@ -556,6 +556,24 @@ export const brokerApi = {
     const response = await api.post(`/broker/${brokerName}/disconnect`)
     return response.data
   },
+
+  // Save OAuth broker credentials (APP_ID and Secret Key)
+  saveCredentials: async (brokerName: string, data: { app_id: string; secret_key: string }) => {
+    const response = await api.post(`/broker/${brokerName}/save-credentials`, data)
+    return response.data
+  },
+
+  // Get redirect URI for broker configuration
+  getRedirectUri: async (brokerName: string) => {
+    const response = await api.get(`/broker/${brokerName}/redirect-uri`)
+    return response.data
+  },
+
+  // Get credentials status (whether user has saved credentials)
+  getCredentialsStatus: async (brokerName: string) => {
+    const response = await api.get(`/broker/${brokerName}/credentials-status`)
+    return response.data
+  },
 }
 
 // Optimization API
