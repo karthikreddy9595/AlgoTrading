@@ -5,23 +5,26 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatCurrency(amount: number, currency = 'INR'): string {
+export function formatCurrency(amount: number | string, currency = 'INR'): string {
+  const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency,
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
-  }).format(amount)
+  }).format(numAmount)
 }
 
-export function formatPercent(value: number): string {
-  const formatted = value.toFixed(2)
-  const prefix = value >= 0 ? '+' : ''
+export function formatPercent(value: number | string): string {
+  const numValue = typeof value === 'string' ? parseFloat(value) : value
+  const formatted = numValue.toFixed(2)
+  const prefix = numValue >= 0 ? '+' : ''
   return `${prefix}${formatted}%`
 }
 
-export function formatNumber(value: number): string {
-  return new Intl.NumberFormat('en-IN').format(value)
+export function formatNumber(value: number | string): string {
+  const numValue = typeof value === 'string' ? parseFloat(value) : value
+  return new Intl.NumberFormat('en-IN').format(numValue)
 }
 
 export function getPnLClass(pnl: number): string {

@@ -12,28 +12,35 @@ AlgoTrading is a full-stack algorithmic trading platform for Indian retail trade
 
 ### Backend (from `backend/` directory)
 ```bash
-# Setup
-python -m venv venv && venv\Scripts\activate  # Windows
-pip install -r requirements.txt
+# Setup (using uv - https://docs.astral.sh/uv/)
+uv sync                                       # Install all dependencies
+uv sync --dev                                 # Install with dev dependencies
 
 # Run server
-uvicorn app.main:app --reload --port 8000
+uv run uvicorn app.main:app --reload --port 8000
 
 # Database migrations
-alembic upgrade head                          # Apply migrations
-alembic revision --autogenerate -m "message"  # Create migration
+uv run alembic upgrade head                   # Apply migrations
+uv run alembic revision --autogenerate -m "message"  # Create migration
 
 # Tests
-pytest                                        # All tests
-pytest tests/test_api/                        # API tests only
-pytest tests/test_brokers/                    # Broker tests only
-pytest --cov                                  # With coverage
+uv run pytest                                 # All tests
+uv run pytest tests/test_api/                 # API tests only
+uv run pytest tests/test_brokers/             # Broker tests only
+uv run pytest --cov                           # With coverage
 
 # Code quality
-black .                                       # Format
-isort .                                       # Sort imports
-flake8 .                                      # Lint
-mypy .                                        # Type check
+uv run black .                                # Format
+uv run isort .                                # Sort imports
+uv run flake8 .                               # Lint
+uv run mypy .                                 # Type check
+uv run ruff check .                           # Fast linting with ruff
+
+# Dependency management
+uv add <package>                              # Add a dependency
+uv add --dev <package>                        # Add a dev dependency
+uv lock                                       # Update lock file
+uv pip compile pyproject.toml -o requirements.txt  # Generate requirements.txt (if needed)
 ```
 
 ### Frontend (from `frontend/` directory)

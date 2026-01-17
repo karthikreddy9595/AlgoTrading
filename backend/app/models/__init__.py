@@ -4,6 +4,8 @@ from app.models.subscription import SubscriptionPlan, UserSubscription, Strategy
 from app.models.order import Position, Order
 from app.models.trade import Trade
 from app.models.notification import Notification, NotificationPreference, AuditLog
+from app.models.backtest import Backtest, BacktestResult, BacktestTrade, BacktestEquityCurve
+from app.models.optimization import Optimization, OptimizationResult
 
 __all__ = [
     "User",
@@ -20,4 +22,10 @@ __all__ = [
     "Notification",
     "NotificationPreference",
     "AuditLog",
+    "Backtest",
+    "BacktestResult",
+    "BacktestTrade",
+    "BacktestEquityCurve",
+    "Optimization",
+    "OptimizationResult",
 ]

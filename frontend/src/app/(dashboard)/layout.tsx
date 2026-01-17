@@ -7,6 +7,7 @@ import {
   TrendingUp,
   LayoutDashboard,
   BarChart3,
+  FlaskConical,
   Wallet,
   FileText,
   Settings,
@@ -19,10 +20,12 @@ import {
 import { useAuthStore } from '@/stores/authStore'
 import { authApi, userApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { IndexTicker } from '@/components/IndexTicker'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Strategies', href: '/dashboard/strategies', icon: BarChart3 },
+  { name: 'Backtest', href: '/dashboard/backtest', icon: FlaskConical },
   { name: 'Portfolio', href: '/dashboard/portfolio', icon: Wallet },
   { name: 'Reports', href: '/dashboard/reports', icon: FileText },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
@@ -170,7 +173,12 @@ export default function DashboardLayout({
               <Menu className="h-5 w-5" />
             </button>
 
-            <div className="flex items-center gap-4 ml-auto">
+            {/* Market Index Ticker */}
+            <div className="hidden sm:flex flex-1 justify-center mx-4">
+              <IndexTicker />
+            </div>
+
+            <div className="flex items-center gap-4 sm:ml-0 ml-auto">
               <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 relative">
                 <Bell className="h-5 w-5" />
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>

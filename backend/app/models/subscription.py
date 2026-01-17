@@ -62,6 +62,10 @@ class StrategySubscription(Base):
     per_trade_stop_loss_percent = Column(Numeric(5, 2), default=2)
     max_positions = Column(Integer, default=5)
 
+    # Strategy configuration (signal parameters)
+    config_params = Column(JSONB, nullable=True, default={})
+    selected_symbols = Column(ARRAY(Text), nullable=True)
+
     # Scheduling
     scheduled_start = Column(Time, nullable=True)
     scheduled_stop = Column(Time, nullable=True)

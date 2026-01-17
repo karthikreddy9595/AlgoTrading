@@ -131,12 +131,24 @@ export const strategyApi = {
     return response.data
   },
 
+  getWithConfig: async (id: string) => {
+    const response = await api.get(`/strategies/${id}/config`)
+    return response.data
+  },
+
   subscribe: async (data: {
     strategy_id: string
     capital_allocated: number
     is_paper_trading: boolean
     max_drawdown_percent?: number
     daily_loss_limit?: number
+    per_trade_stop_loss_percent?: number
+    max_positions?: number
+    config_params?: Record<string, number | boolean>
+    selected_symbols: string[]
+    scheduled_start?: string
+    scheduled_stop?: string
+    active_days?: number[]
   }) => {
     const response = await api.post('/strategies/subscribe', data)
     return response.data
@@ -144,6 +156,28 @@ export const strategyApi = {
 
   getMySubscriptions: async () => {
     const response = await api.get('/strategies/subscriptions/my')
+    return response.data
+  },
+
+  getSubscription: async (subscriptionId: string) => {
+    const response = await api.get(`/strategies/subscriptions/${subscriptionId}`)
+    return response.data
+  },
+
+  updateSubscription: async (subscriptionId: string, data: {
+    capital_allocated?: number
+    is_paper_trading?: boolean
+    max_drawdown_percent?: number
+    daily_loss_limit?: number
+    per_trade_stop_loss_percent?: number
+    max_positions?: number
+    config_params?: Record<string, number | boolean>
+    selected_symbols?: string[]
+    scheduled_start?: string
+    scheduled_stop?: string
+    active_days?: number[]
+  }) => {
+    const response = await api.patch(`/strategies/subscriptions/${subscriptionId}`, data)
     return response.data
   },
 
@@ -369,6 +403,116 @@ export const adminApi = {
   },
 }
 
+// Market API
+export const marketApi = {
+  getIndices: async () => {
+    const response = await api.get('/market/indices')
+    return response.data
+  },
+
+  getHistoricalData: async (params: {
+    symbol: string
+    exchange?: string
+    interval?: string
+    start_date: string
+    end_date: string
+  }) => {
+    const response = await api.get(`/market/historical/${params.symbol}`, {
+      params: {
+        exchange: params.exchange,
+        interval: params.interval,
+        start_date: params.start_date,
+        end_date: params.end_date,
+      },
+    })
+    return response.data
+  },
+
+  searchSymbols: async (query: string, exchange?: string) => {
+    const response = await api.get('/market/symbols/search', {
+      params: { query, exchange },
+    })
+    return response.data
+  },
+
+  getPopularSymbols: async (exchange?: string, limit?: number) => {
+    const response = await api.get('/market/symbols/popular', {
+      params: { exchange, limit },
+    })
+    return response.data
+  },
+}
+
+// Backtest API
+export const backtestApi = {
+  run: async (data: {
+    strategy_id: string
+    symbol: string
+    exchange?: string
+    interval?: string
+    start_date: string
+    end_date: string
+    initial_capital: number
+    config?: Record<string, unknown>
+  }) => {
+    const response = await api.post('/backtest/run', data)
+    return response.data
+  },
+
+  get: async (backtestId: string) => {
+    const response = await api.get(`/backtest/${backtestId}`)
+    return response.data
+  },
+
+  getStatus: async (backtestId: string) => {
+    const response = await api.get(`/backtest/${backtestId}/status`)
+    return response.data
+  },
+
+  getResults: async (backtestId: string) => {
+    const response = await api.get(`/backtest/${backtestId}/results`)
+    return response.data
+  },
+
+  getTrades: async (backtestId: string, params?: { page?: number; page_size?: number }) => {
+    const response = await api.get(`/backtest/${backtestId}/trades`, { params })
+    return response.data
+  },
+
+  getChartData: async (backtestId: string) => {
+    const response = await api.get(`/backtest/${backtestId}/chart-data`)
+    return response.data
+  },
+
+  getHistory: async (params?: {
+    skip?: number
+    limit?: number
+    status?: string
+    strategy_id?: string
+  }) => {
+    const response = await api.get('/backtest/history', { params })
+    return response.data
+  },
+
+  subscribeFromBacktest: async (backtestId: string, data: {
+    capital_allocated: number
+    broker_connection_id?: string
+    is_paper_trading?: boolean
+    max_drawdown_percent?: number
+    daily_loss_limit?: number
+    per_trade_stop_loss_percent?: number
+    max_positions?: number
+  }) => {
+    const response = await api.post(`/backtest/${backtestId}/subscribe`, data)
+    return response.data
+  },
+
+  delete: async (backtestId: string) => {
+    const response = await api.delete(`/backtest/${backtestId}`)
+    return response.data
+  },
+}
+
 // Broker API
 export const brokerApi = {
   // List all available broker plugins
@@ -410,6 +554,56 @@ export const brokerApi = {
   // Disconnect from broker
   disconnect: async (brokerName: string) => {
     const response = await api.post(`/broker/${brokerName}/disconnect`)
+    return response.data
+  },
+}
+
+// Optimization API
+export const optimizationApi = {
+  run: async (data: {
+    source_backtest_id: string
+    parameter_ranges: Record<string, { min: number; max: number; step: number }>
+    num_samples: number
+    objective_metric: string
+  }) => {
+    const response = await api.post('/optimization/run', data)
+    return response.data
+  },
+
+  get: async (optimizationId: string) => {
+    const response = await api.get(`/optimization/${optimizationId}`)
+    return response.data
+  },
+
+  getStatus: async (optimizationId: string) => {
+    const response = await api.get(`/optimization/${optimizationId}/status`)
+    return response.data
+  },
+
+  getResults: async (optimizationId: string) => {
+    const response = await api.get(`/optimization/${optimizationId}/results`)
+    return response.data
+  },
+
+  getHeatmap: async (
+    optimizationId: string,
+    paramX: string,
+    paramY: string,
+    metric?: string
+  ) => {
+    const response = await api.get(`/optimization/${optimizationId}/heatmap`, {
+      params: { param_x: paramX, param_y: paramY, metric },
+    })
+    return response.data
+  },
+
+  getHistory: async (params?: { skip?: number; limit?: number }) => {
+    const response = await api.get('/optimization/history', { params })
+    return response.data
+  },
+
+  delete: async (optimizationId: string) => {
+    const response = await api.delete(`/optimization/${optimizationId}`)
     return response.data
   },
 }

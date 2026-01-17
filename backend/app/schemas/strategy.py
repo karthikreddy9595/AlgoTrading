@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime, time
 from uuid import UUID
 from decimal import Decimal
@@ -68,15 +68,41 @@ class StrategyListResponse(BaseModel):
         from_attributes = True
 
 
+class ConfigurableParam(BaseModel):
+    """Schema for a configurable strategy parameter."""
+    name: str
+    display_name: str
+    type: str  # int, float, decimal, bool
+    default_value: Any
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
+    description: Optional[str] = None
+
+
+class StrategyDetailResponse(StrategyResponse):
+    """Extended strategy response with configurable parameters."""
+    long_description: Optional[str] = None
+    supported_symbols: Optional[List[str]] = None
+    configurable_params: List[ConfigurableParam] = []
+
+    class Config:
+        from_attributes = True
+
+
 class StrategySubscriptionCreate(BaseModel):
     strategy_id: UUID
     broker_connection_id: Optional[UUID] = None
     capital_allocated: Decimal = Field(..., ge=10000)
     is_paper_trading: bool = True
+    # Risk management parameters
     max_drawdown_percent: Decimal = Field(default=10, ge=1, le=50)
     daily_loss_limit: Optional[Decimal] = None
     per_trade_stop_loss_percent: Decimal = Field(default=2, ge=0.5, le=10)
     max_positions: int = Field(default=5, ge=1, le=20)
+    # Strategy configuration
+    config_params: Optional[Dict[str, Any]] = None
+    selected_symbols: List[str] = Field(..., min_length=1)
+    # Scheduling
     scheduled_start: Optional[time] = None
     scheduled_stop: Optional[time] = None
     active_days: List[int] = Field(default=[1, 2, 3, 4, 5])
@@ -85,10 +111,15 @@ class StrategySubscriptionCreate(BaseModel):
 class StrategySubscriptionUpdate(BaseModel):
     capital_allocated: Optional[Decimal] = Field(None, ge=10000)
     is_paper_trading: Optional[bool] = None
+    # Risk management parameters
     max_drawdown_percent: Optional[Decimal] = Field(None, ge=1, le=50)
     daily_loss_limit: Optional[Decimal] = None
     per_trade_stop_loss_percent: Optional[Decimal] = Field(None, ge=0.5, le=10)
     max_positions: Optional[int] = Field(None, ge=1, le=20)
+    # Strategy configuration
+    config_params: Optional[Dict[str, Any]] = None
+    selected_symbols: Optional[List[str]] = None
+    # Scheduling
     scheduled_start: Optional[time] = None
     scheduled_stop: Optional[time] = None
     active_days: Optional[List[int]] = None
@@ -102,13 +133,19 @@ class StrategySubscriptionResponse(BaseModel):
     status: str
     capital_allocated: Decimal
     is_paper_trading: bool
+    # Risk management
     max_drawdown_percent: Decimal
     daily_loss_limit: Optional[Decimal]
     per_trade_stop_loss_percent: Decimal
     max_positions: int
+    # Strategy configuration
+    config_params: Optional[Dict[str, Any]] = None
+    selected_symbols: Optional[List[str]] = None
+    # Scheduling
     scheduled_start: Optional[time]
     scheduled_stop: Optional[time]
     active_days: List[int]
+    # State
     current_pnl: Decimal
     today_pnl: Decimal
     last_started_at: Optional[datetime]

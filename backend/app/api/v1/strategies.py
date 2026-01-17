@@ -3,13 +3,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import List, Optional
 from uuid import UUID
+import importlib
 
 from app.core.database import get_db
+from app.core.execution import get_execution_engine, is_engine_initialized
 from app.api.deps import get_current_user
 from app.models import User, Strategy, StrategySubscription, BrokerConnection
 from app.schemas import (
     StrategyListResponse,
     StrategyResponse,
+    StrategyDetailResponse,
+    ConfigurableParam,
     StrategySubscriptionCreate,
     StrategySubscriptionUpdate,
     StrategySubscriptionResponse,
@@ -93,6 +97,71 @@ async def get_strategy_by_slug(
         )
 
     return strategy
+
+
+@router.get("/{strategy_id}/config", response_model=StrategyDetailResponse)
+async def get_strategy_with_config(
+    strategy_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get strategy details including configurable parameters.
+    """
+    result = await db.execute(
+        select(Strategy).where(Strategy.id == strategy_id, Strategy.is_active == True)
+    )
+    strategy = result.scalar_one_or_none()
+
+    if not strategy:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Strategy not found",
+        )
+
+    # Load strategy class to get configurable params
+    try:
+        module = importlib.import_module(strategy.module_path)
+        strategy_class = getattr(module, strategy.class_name)
+        raw_params = strategy_class.get_configurable_params()
+
+        configurable_params = [
+            ConfigurableParam(
+                name=p.name,
+                display_name=p.display_name,
+                type=p.param_type,
+                default_value=p.default_value,
+                min_value=p.min_value,
+                max_value=p.max_value,
+                description=p.description,
+            )
+            for p in raw_params
+        ]
+    except (ImportError, AttributeError) as e:
+        # If strategy class can't be loaded, return empty params
+        configurable_params = []
+
+    return StrategyDetailResponse(
+        id=strategy.id,
+        name=strategy.name,
+        slug=strategy.slug,
+        description=strategy.description,
+        long_description=strategy.long_description,
+        version=strategy.version,
+        author=strategy.author,
+        min_capital=strategy.min_capital,
+        expected_return_percent=strategy.expected_return_percent,
+        max_drawdown_percent=strategy.max_drawdown_percent,
+        timeframe=strategy.timeframe,
+        supported_symbols=strategy.supported_symbols,
+        tags=strategy.tags,
+        is_active=strategy.is_active,
+        is_featured=strategy.is_featured,
+        module_path=strategy.module_path,
+        class_name=strategy.class_name,
+        created_at=strategy.created_at,
+        updated_at=strategy.updated_at,
+        configurable_params=configurable_params,
+    )
 
 
 # --- Strategy Subscriptions ---
@@ -188,6 +257,37 @@ async def subscribe_to_strategy(
             detail="Free tier allows only 1 strategy. Please upgrade to subscribe to more.",
         )
 
+    # Validate config_params against strategy's configurable params
+    validated_config_params = {}
+    if subscription_data.config_params:
+        try:
+            module = importlib.import_module(strategy.module_path)
+            strategy_class = getattr(module, strategy.class_name)
+            valid_params = {p.name: p for p in strategy_class.get_configurable_params()}
+
+            for key, value in subscription_data.config_params.items():
+                if key not in valid_params:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Invalid config parameter: {key}",
+                    )
+                param = valid_params[key]
+                # Validate value within range
+                if param.min_value is not None and value < param.min_value:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Parameter {key} must be >= {param.min_value}",
+                    )
+                if param.max_value is not None and value > param.max_value:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Parameter {key} must be <= {param.max_value}",
+                    )
+                validated_config_params[key] = value
+        except (ImportError, AttributeError):
+            # If strategy class can't be loaded, accept params as-is
+            validated_config_params = subscription_data.config_params
+
     subscription = StrategySubscription(
         user_id=current_user.id,
         strategy_id=subscription_data.strategy_id,
@@ -198,6 +298,8 @@ async def subscribe_to_strategy(
         daily_loss_limit=subscription_data.daily_loss_limit,
         per_trade_stop_loss_percent=subscription_data.per_trade_stop_loss_percent,
         max_positions=subscription_data.max_positions,
+        config_params=validated_config_params,
+        selected_symbols=subscription_data.selected_symbols,
         scheduled_start=subscription_data.scheduled_start,
         scheduled_stop=subscription_data.scheduled_stop,
         active_days=subscription_data.active_days,
@@ -302,8 +404,23 @@ async def subscription_action(
             detail="Subscription not found",
         )
 
+    # Get the associated strategy
+    result = await db.execute(
+        select(Strategy).where(Strategy.id == subscription.strategy_id)
+    )
+    strategy = result.scalar_one_or_none()
+
+    if not strategy:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Strategy not found",
+        )
+
     current_status = subscription.status
     new_status = None
+
+    # Check if execution engine is available
+    engine_available = is_engine_initialized()
 
     if action.action == "start":
         if current_status not in ["inactive", "stopped"]:
@@ -311,8 +428,54 @@ async def subscription_action(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot start strategy from status: {current_status}",
             )
+
+        if engine_available:
+            try:
+                engine = get_execution_engine()
+
+                # Build config for execution engine
+                config = {
+                    "context": {
+                        "strategy_id": str(subscription.strategy_id),
+                        "user_id": str(current_user.id),
+                        "subscription_id": str(subscription_id),
+                        "capital": float(subscription.capital_allocated),
+                        "max_positions": subscription.max_positions,
+                        "max_drawdown_percent": float(subscription.max_drawdown_percent),
+                        "daily_loss_limit": float(subscription.daily_loss_limit or 0),
+                        "per_trade_sl_percent": float(subscription.per_trade_stop_loss_percent),
+                        "is_paper_trading": subscription.is_paper_trading,
+                    },
+                    "risk_limits": {
+                        "max_drawdown_percent": float(subscription.max_drawdown_percent),
+                        "daily_loss_limit": float(subscription.daily_loss_limit or 0),
+                        "per_trade_sl_percent": float(subscription.per_trade_stop_loss_percent),
+                        "max_positions": subscription.max_positions,
+                    },
+                    "config_params": subscription.config_params or {},
+                    "symbols": subscription.selected_symbols or [],
+                }
+
+                success = await engine.start_strategy(
+                    subscription_id=str(subscription_id),
+                    user_id=str(current_user.id),
+                    strategy_module=strategy.module_path,
+                    strategy_class=strategy.class_name,
+                    config=config,
+                )
+
+                if not success:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Failed to start strategy execution",
+                    )
+            except RuntimeError as e:
+                # Execution engine not initialized - continue with status update only
+                pass
+
         new_status = "active"
-        # TODO: Actually start the strategy execution
+        from datetime import datetime
+        subscription.last_started_at = datetime.utcnow()
 
     elif action.action == "stop":
         if current_status not in ["active", "paused"]:
@@ -320,8 +483,17 @@ async def subscription_action(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot stop strategy from status: {current_status}",
             )
+
+        if engine_available:
+            try:
+                engine = get_execution_engine()
+                await engine.stop_strategy(str(subscription_id))
+            except RuntimeError:
+                pass
+
         new_status = "stopped"
-        # TODO: Actually stop the strategy execution
+        from datetime import datetime
+        subscription.last_stopped_at = datetime.utcnow()
 
     elif action.action == "pause":
         if current_status != "active":
@@ -329,8 +501,15 @@ async def subscription_action(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot pause strategy from status: {current_status}",
             )
+
+        if engine_available:
+            try:
+                engine = get_execution_engine()
+                await engine.pause_strategy(str(subscription_id))
+            except RuntimeError:
+                pass
+
         new_status = "paused"
-        # TODO: Actually pause the strategy execution
 
     elif action.action == "resume":
         if current_status != "paused":
@@ -338,8 +517,15 @@ async def subscription_action(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot resume strategy from status: {current_status}",
             )
+
+        if engine_available:
+            try:
+                engine = get_execution_engine()
+                await engine.resume_strategy(str(subscription_id))
+            except RuntimeError:
+                pass
+
         new_status = "active"
-        # TODO: Actually resume the strategy execution
 
     subscription.status = new_status
     await db.commit()

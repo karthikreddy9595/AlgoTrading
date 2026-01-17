@@ -72,7 +72,8 @@ class Settings(BaseSettings):
     ORDER_TIMEOUT: int = 30  # seconds
 
     class Config:
-        env_file = ".env"
+        env_file = "../.env"
+        extra = "ignore"
         case_sensitive = True
 
 

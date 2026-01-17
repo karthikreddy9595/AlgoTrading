@@ -259,14 +259,22 @@ function StrategyRow({ subscription }: { subscription: StrategySubscription }) {
                 Paper
               </span>
             )}
-            <span
-              className={cn(
-                'px-2 py-0.5 text-xs rounded capitalize',
-                getStatusColor(subscription.status)
-              )}
-            >
-              {subscription.status}
-            </span>
+            {subscription.status === 'active' && (
+              <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs rounded bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-600 dark:bg-green-400 animate-pulse"></span>
+                LIVE
+              </span>
+            )}
+            {subscription.status !== 'active' && (
+              <span
+                className={cn(
+                  'px-2 py-0.5 text-xs rounded capitalize',
+                  getStatusColor(subscription.status)
+                )}
+              >
+                {subscription.status}
+              </span>
+            )}
           </div>
           <div className="text-sm text-gray-500 dark:text-gray-400">
             Capital: {formatCurrency(subscription.capital_allocated)}

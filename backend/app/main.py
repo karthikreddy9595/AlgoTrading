@@ -6,6 +6,7 @@ import redis.asyncio as redis
 
 from app.core.config import settings
 from app.core.database import init_db
+from app.core.execution import init_execution_engine, shutdown_execution_engine
 from app.api.v1.router import api_router
 from app.api.websocket import portfolio as ws_portfolio
 from app.api.websocket import market_data as ws_market_data
@@ -24,10 +25,25 @@ async def lifespan(app: FastAPI):
     if settings.DEBUG:
         await init_db()
 
+    # Initialize execution engine for strategy execution
+    try:
+        await init_execution_engine(settings.REDIS_URL)
+        print("Execution engine initialized")
+    except Exception as e:
+        print(f"Warning: Failed to initialize execution engine: {e}")
+
     yield
 
     # Shutdown
     print("Shutting down AlgoTrading Platform...")
+
+    # Shutdown execution engine
+    try:
+        await shutdown_execution_engine()
+        print("Execution engine shutdown complete")
+    except Exception as e:
+        print(f"Warning: Failed to shutdown execution engine: {e}")
+
     await app.state.redis.close()
 
 

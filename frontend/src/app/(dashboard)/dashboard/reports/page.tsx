@@ -214,7 +214,7 @@ export default function ReportsPage() {
         <StatCard
           title="Max Drawdown"
           value={formatPercent(performance?.max_drawdown || 0)}
-          subtitle={`Sharpe: ${(performance?.sharpe_ratio || 0).toFixed(2)}`}
+          subtitle={`Sharpe: ${Number(performance?.sharpe_ratio || 0).toFixed(2)}`}
           icon={<BarChart3 className="h-5 w-5" />}
           color="red"
         />

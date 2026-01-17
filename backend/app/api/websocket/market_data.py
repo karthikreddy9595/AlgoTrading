@@ -5,7 +5,7 @@ WebSocket endpoint for real-time market data.
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import Optional, Set
+from typing import Optional, Set, Dict, List
 import asyncio
 import json
 
@@ -15,6 +15,17 @@ from app.models import User
 from app.api.websocket.manager import manager
 
 router = APIRouter()
+
+# Index symbols for auto-subscription
+INDEX_SYMBOLS = {
+    "NIFTY50": {"symbol": "NSE:NIFTY50-INDEX", "display_name": "NIFTY 50"},
+    "BANKNIFTY": {"symbol": "NSE:NIFTY BANK-INDEX", "display_name": "BANK NIFTY"},
+    "SENSEX": {"symbol": "BSE:SENSEX-INDEX", "display_name": "SENSEX"},
+    "BANKEX": {"symbol": "BSE:BANKEX-INDEX", "display_name": "BANKEX"},
+}
+
+# Special topic for index updates
+INDICES_TOPIC = "market:indices"
 
 
 class MarketDataHub:
@@ -31,6 +42,17 @@ class MarketDataHub:
 
         # Symbol -> last price (for new subscribers)
         self.last_prices: dict = {}
+
+        # Index values cache: key -> {ltp, change, change_percent, ...}
+        self.index_values: Dict[str, dict] = {}
+
+    def update_index(self, index_key: str, data: dict):
+        """Update cached index value."""
+        self.index_values[index_key] = data
+
+    def get_index_values(self) -> Dict[str, dict]:
+        """Get all cached index values."""
+        return self.index_values.copy()
 
     def add_symbol(self, symbol: str):
         """Add a symbol to global subscription."""
@@ -97,6 +119,17 @@ async def market_data_websocket(
     # Accept connection
     await manager.connect(websocket, user_id)
 
+    # Auto-subscribe to indices topic
+    await manager.subscribe_to_topic(websocket, INDICES_TOPIC)
+
+    # Send current index values if available
+    index_values = market_hub.get_index_values()
+    if index_values:
+        await websocket.send_json({
+            "type": "indices",
+            "data": index_values
+        })
+
     try:
         # Handle messages
         while True:
@@ -147,6 +180,14 @@ async def handle_market_message(websocket: WebSocket, data: dict):
                     "type": "error",
                     "message": f"No data available for {symbol}"
                 })
+
+    elif msg_type == "get_indices":
+        # Return current index values
+        index_values = market_hub.get_index_values()
+        await websocket.send_json({
+            "type": "indices",
+            "data": index_values
+        })
 
     else:
         await websocket.send_json({
@@ -247,4 +288,41 @@ async def broadcast_depth(symbol: str, depth_data: dict):
         "type": "depth",
         "symbol": symbol,
         "data": depth_data
+    })
+
+
+async def broadcast_index_update(index_key: str, index_data: dict):
+    """
+    Broadcast a single index update to all connected clients.
+
+    Args:
+        index_key: Index identifier (e.g., "NIFTY50", "BANKNIFTY")
+        index_data: Index data including ltp, change, change_percent, etc.
+    """
+    # Update cache
+    market_hub.update_index(index_key, index_data)
+
+    # Broadcast to all clients subscribed to indices topic
+    await manager.broadcast_to_topic(INDICES_TOPIC, {
+        "type": "index_update",
+        "index": index_key,
+        "data": index_data
+    })
+
+
+async def broadcast_all_indices(indices_data: Dict[str, dict]):
+    """
+    Broadcast all index values to all connected clients.
+
+    Args:
+        indices_data: Dictionary of index_key -> index_data
+    """
+    # Update cache for all indices
+    for key, data in indices_data.items():
+        market_hub.update_index(key, data)
+
+    # Broadcast to all clients subscribed to indices topic
+    await manager.broadcast_to_topic(INDICES_TOPIC, {
+        "type": "indices",
+        "data": indices_data
     })

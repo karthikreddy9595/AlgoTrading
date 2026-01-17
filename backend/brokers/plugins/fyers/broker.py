@@ -13,7 +13,7 @@ import hashlib
 import json
 from typing import List, Optional, Callable, Dict, Any
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlencode
 import aiohttp
 
@@ -601,9 +601,15 @@ class FyersBroker(BaseBroker):
         from_date: datetime,
         to_date: datetime,
     ) -> List[dict]:
-        """Get historical OHLC data."""
-        session = await self._get_session()
+        """
+        Get historical OHLC data.
 
+        Fyers API has limits on data range per request:
+        - Intraday (1min to 240min): max 100 days per request
+        - Daily: max 366 days per request
+
+        This method automatically chunks requests to handle longer date ranges.
+        """
         # Map interval to Fyers format
         interval_map = {
             "1min": "1",
@@ -614,13 +620,85 @@ class FyersBroker(BaseBroker):
             "1day": "D",
         }
 
-        fyers_symbol = f"{exchange}:{symbol}"
+        # Max days per request based on interval (Fyers API limits)
+        max_days_map = {
+            "1min": 100,
+            "5min": 100,
+            "15min": 100,
+            "30min": 100,
+            "1hour": 100,
+            "1day": 365,
+        }
+
+        # Use denormalize_symbol to get proper Fyers format (adds -EQ for equities)
+        fyers_symbol = self.denormalize_symbol(symbol, exchange)
         fyers_interval = interval_map.get(interval, "D")
+        max_days = max_days_map.get(interval, 100)
+
+        # Calculate total days requested
+        total_days = (to_date - from_date).days
+
+        # If within limit, make single request
+        if total_days <= max_days:
+            return await self._fetch_historical_chunk(
+                fyers_symbol, fyers_interval, from_date, to_date
+            )
+
+        # Otherwise, chunk the requests
+        all_candles = []
+        chunk_start = from_date
+
+        while chunk_start < to_date:
+            chunk_end = min(chunk_start + timedelta(days=max_days), to_date)
+
+            try:
+                chunk_data = await self._fetch_historical_chunk(
+                    fyers_symbol, fyers_interval, chunk_start, chunk_end
+                )
+                all_candles.extend(chunk_data)
+            except Exception as e:
+                # Log but continue if a chunk fails (might be no data for that period)
+                print(f"Warning: Failed to fetch chunk {chunk_start} to {chunk_end}: {e}")
+
+            # Move to next chunk
+            chunk_start = chunk_end
+
+            # Small delay to avoid rate limiting
+            await asyncio.sleep(0.1)
+
+        if not all_candles:
+            raise Exception(
+                f"No historical data available for {fyers_symbol} "
+                f"from {from_date.strftime('%Y-%m-%d')} to {to_date.strftime('%Y-%m-%d')}. "
+                f"Please check if the symbol exists and the date range is valid."
+            )
+
+        # Sort by timestamp and remove duplicates
+        all_candles.sort(key=lambda x: x["timestamp"])
+        seen_timestamps = set()
+        unique_candles = []
+        for candle in all_candles:
+            ts = candle["timestamp"]
+            if ts not in seen_timestamps:
+                seen_timestamps.add(ts)
+                unique_candles.append(candle)
+
+        return unique_candles
+
+    async def _fetch_historical_chunk(
+        self,
+        fyers_symbol: str,
+        fyers_interval: str,
+        from_date: datetime,
+        to_date: datetime,
+    ) -> List[dict]:
+        """Fetch a single chunk of historical data from Fyers API."""
+        session = await self._get_session()
 
         params = {
             "symbol": fyers_symbol,
             "resolution": fyers_interval,
-            "date_format": "1",
+            "date_format": "0",  # 0 = Unix timestamp format
             "range_from": int(from_date.timestamp()),
             "range_to": int(to_date.timestamp()),
             "cont_flag": "1",
@@ -634,11 +712,21 @@ class FyersBroker(BaseBroker):
             data = await response.json()
 
             if data.get("s") != "ok":
-                return []
+                error_msg = data.get("message", "Unknown error")
+                error_code = data.get("code", "")
+                raise Exception(
+                    f"Fyers API error: {error_msg} (code: {error_code}). "
+                    f"Symbol: {fyers_symbol}, Interval: {fyers_interval}, "
+                    f"Range: {from_date.strftime('%Y-%m-%d')} to {to_date.strftime('%Y-%m-%d')}"
+                )
 
-            candles = []
-            for c in data.get("candles", []):
-                candles.append({
+            candles = data.get("candles", [])
+            if not candles:
+                return []  # Return empty list for chunks with no data
+
+            result = []
+            for c in candles:
+                result.append({
                     "timestamp": datetime.fromtimestamp(c[0]),
                     "open": c[1],
                     "high": c[2],
@@ -647,7 +735,7 @@ class FyersBroker(BaseBroker):
                     "volume": c[5],
                 })
 
-            return candles
+            return result
 
     # ==================== Symbol Mapping ====================
 
@@ -666,3 +754,76 @@ class FyersBroker(BaseBroker):
         if exchange in ["NSE", "BSE"]:
             return f"{exchange}:{symbol}-EQ"
         return f"{exchange}:{symbol}"
+
+    async def search_symbols(
+        self,
+        query: str,
+        exchange: Optional[str] = None,
+    ) -> List[dict]:
+        """
+        Search for tradeable symbols.
+
+        Note: Fyers API doesn't have a direct symbol search endpoint.
+        This implementation searches against a static list of popular symbols.
+        In production, you could cache and search the symbol master file.
+
+        Args:
+            query: Search query (symbol name or partial match)
+            exchange: Optional exchange filter (NSE, BSE, etc.)
+
+        Returns:
+            List of matching symbols with metadata
+        """
+        # Popular NSE symbols with company names
+        symbols_data = [
+            {"symbol": "RELIANCE", "exchange": "NSE", "name": "Reliance Industries Ltd", "segment": "EQ"},
+            {"symbol": "TCS", "exchange": "NSE", "name": "Tata Consultancy Services Ltd", "segment": "EQ"},
+            {"symbol": "HDFCBANK", "exchange": "NSE", "name": "HDFC Bank Ltd", "segment": "EQ"},
+            {"symbol": "INFY", "exchange": "NSE", "name": "Infosys Ltd", "segment": "EQ"},
+            {"symbol": "ICICIBANK", "exchange": "NSE", "name": "ICICI Bank Ltd", "segment": "EQ"},
+            {"symbol": "HINDUNILVR", "exchange": "NSE", "name": "Hindustan Unilever Ltd", "segment": "EQ"},
+            {"symbol": "SBIN", "exchange": "NSE", "name": "State Bank of India", "segment": "EQ"},
+            {"symbol": "BHARTIARTL", "exchange": "NSE", "name": "Bharti Airtel Ltd", "segment": "EQ"},
+            {"symbol": "ITC", "exchange": "NSE", "name": "ITC Ltd", "segment": "EQ"},
+            {"symbol": "KOTAKBANK", "exchange": "NSE", "name": "Kotak Mahindra Bank Ltd", "segment": "EQ"},
+            {"symbol": "LT", "exchange": "NSE", "name": "Larsen & Toubro Ltd", "segment": "EQ"},
+            {"symbol": "AXISBANK", "exchange": "NSE", "name": "Axis Bank Ltd", "segment": "EQ"},
+            {"symbol": "ASIANPAINT", "exchange": "NSE", "name": "Asian Paints Ltd", "segment": "EQ"},
+            {"symbol": "MARUTI", "exchange": "NSE", "name": "Maruti Suzuki India Ltd", "segment": "EQ"},
+            {"symbol": "SUNPHARMA", "exchange": "NSE", "name": "Sun Pharmaceutical Industries Ltd", "segment": "EQ"},
+            {"symbol": "TITAN", "exchange": "NSE", "name": "Titan Company Ltd", "segment": "EQ"},
+            {"symbol": "BAJFINANCE", "exchange": "NSE", "name": "Bajaj Finance Ltd", "segment": "EQ"},
+            {"symbol": "WIPRO", "exchange": "NSE", "name": "Wipro Ltd", "segment": "EQ"},
+            {"symbol": "ULTRACEMCO", "exchange": "NSE", "name": "UltraTech Cement Ltd", "segment": "EQ"},
+            {"symbol": "NESTLEIND", "exchange": "NSE", "name": "Nestle India Ltd", "segment": "EQ"},
+            {"symbol": "TATAMOTORS", "exchange": "NSE", "name": "Tata Motors Ltd", "segment": "EQ"},
+            {"symbol": "TATASTEEL", "exchange": "NSE", "name": "Tata Steel Ltd", "segment": "EQ"},
+            {"symbol": "POWERGRID", "exchange": "NSE", "name": "Power Grid Corporation of India Ltd", "segment": "EQ"},
+            {"symbol": "NTPC", "exchange": "NSE", "name": "NTPC Ltd", "segment": "EQ"},
+            {"symbol": "ONGC", "exchange": "NSE", "name": "Oil and Natural Gas Corporation Ltd", "segment": "EQ"},
+            {"symbol": "HCLTECH", "exchange": "NSE", "name": "HCL Technologies Ltd", "segment": "EQ"},
+            {"symbol": "TECHM", "exchange": "NSE", "name": "Tech Mahindra Ltd", "segment": "EQ"},
+            {"symbol": "ADANIENT", "exchange": "NSE", "name": "Adani Enterprises Ltd", "segment": "EQ"},
+            {"symbol": "ADANIPORTS", "exchange": "NSE", "name": "Adani Ports and SEZ Ltd", "segment": "EQ"},
+            {"symbol": "COALINDIA", "exchange": "NSE", "name": "Coal India Ltd", "segment": "EQ"},
+            {"symbol": "M&M", "exchange": "NSE", "name": "Mahindra & Mahindra Ltd", "segment": "EQ"},
+            {"symbol": "BAJAJFINSV", "exchange": "NSE", "name": "Bajaj Finserv Ltd", "segment": "EQ"},
+            {"symbol": "DRREDDY", "exchange": "NSE", "name": "Dr. Reddy's Laboratories Ltd", "segment": "EQ"},
+            {"symbol": "CIPLA", "exchange": "NSE", "name": "Cipla Ltd", "segment": "EQ"},
+            {"symbol": "EICHERMOT", "exchange": "NSE", "name": "Eicher Motors Ltd", "segment": "EQ"},
+            {"symbol": "DIVISLAB", "exchange": "NSE", "name": "Divi's Laboratories Ltd", "segment": "EQ"},
+            {"symbol": "JSWSTEEL", "exchange": "NSE", "name": "JSW Steel Ltd", "segment": "EQ"},
+            {"symbol": "APOLLOHOSP", "exchange": "NSE", "name": "Apollo Hospitals Enterprise Ltd", "segment": "EQ"},
+            {"symbol": "BRITANNIA", "exchange": "NSE", "name": "Britannia Industries Ltd", "segment": "EQ"},
+            {"symbol": "TATACONSUM", "exchange": "NSE", "name": "Tata Consumer Products Ltd", "segment": "EQ"},
+        ]
+
+        query_lower = query.lower()
+        results = []
+
+        for sym in symbols_data:
+            if query_lower in sym["symbol"].lower() or query_lower in sym["name"].lower():
+                if exchange is None or sym["exchange"] == exchange:
+                    results.append(sym)
+
+        return results[:20]

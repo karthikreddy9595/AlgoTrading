@@ -88,6 +88,18 @@ class Order:
 
 
 @dataclass
+class ConfigurableParam:
+    """Definition of a configurable strategy parameter."""
+    name: str
+    display_name: str
+    param_type: str  # int, float, decimal, bool
+    default_value: Any
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
+    description: str = ""
+
+
+@dataclass
 class StrategyContext:
     """Context provided to strategies during execution."""
     strategy_id: str
@@ -155,6 +167,28 @@ class BaseStrategy(ABC):
     min_capital: Decimal = Decimal("10000")
     supported_symbols: List[str] = []
     timeframe: str = "1min"  # 1min, 5min, 15min, 1hour, 1day
+
+    @classmethod
+    def get_configurable_params(cls) -> List[ConfigurableParam]:
+        """
+        Return list of configurable parameters for this strategy.
+        Override in subclass to expose parameters that users can customize.
+
+        Returns:
+            List of ConfigurableParam defining the customizable parameters
+        """
+        return []
+
+    def apply_config(self, config: Dict[str, Any]) -> None:
+        """
+        Apply configuration parameters to strategy instance.
+        Called during initialization with user-provided config.
+        Override in subclass to handle parameter application.
+
+        Args:
+            config: Dictionary of parameter name to value
+        """
+        pass
 
     def __init__(self, context: StrategyContext):
         """
