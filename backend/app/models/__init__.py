@@ -6,6 +6,7 @@ from app.models.trade import Trade
 from app.models.notification import Notification, NotificationPreference, AuditLog
 from app.models.backtest import Backtest, BacktestResult, BacktestTrade, BacktestEquityCurve
 from app.models.optimization import Optimization, OptimizationResult
+from app.models.blog import BlogCategory, BlogPost
 
 __all__ = [
     "User",
@@ -28,4 +29,6 @@ __all__ = [
     "BacktestEquityCurve",
     "Optimization",
     "OptimizationResult",
+    "BlogCategory",
+    "BlogPost",
 ]

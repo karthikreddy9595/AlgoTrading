@@ -401,6 +401,155 @@ export const adminApi = {
     const response = await api.get('/admin/monitoring/recent-trades', { params: { limit } })
     return response.data
   },
+
+  // Blog Categories
+  getBlogCategories: async (includeInactive?: boolean) => {
+    const response = await api.get('/admin/blog/categories', {
+      params: { include_inactive: includeInactive },
+    })
+    return response.data
+  },
+
+  createBlogCategory: async (data: {
+    name: string
+    slug: string
+    description?: string
+    color?: string
+    display_order?: number
+  }) => {
+    const response = await api.post('/admin/blog/categories', data)
+    return response.data
+  },
+
+  updateBlogCategory: async (id: string, data: {
+    name?: string
+    slug?: string
+    description?: string
+    color?: string
+    is_active?: boolean
+    display_order?: number
+  }) => {
+    const response = await api.patch(`/admin/blog/categories/${id}`, data)
+    return response.data
+  },
+
+  deleteBlogCategory: async (id: string) => {
+    const response = await api.delete(`/admin/blog/categories/${id}`)
+    return response.data
+  },
+
+  // Blog Posts
+  getBlogPosts: async (params?: {
+    skip?: number
+    limit?: number
+    status?: string
+    category_id?: string
+    search?: string
+  }) => {
+    const response = await api.get('/admin/blog/posts', { params })
+    return response.data
+  },
+
+  getBlogPostsCount: async (params?: {
+    status?: string
+    category_id?: string
+  }) => {
+    const response = await api.get('/admin/blog/posts/count', { params })
+    return response.data
+  },
+
+  getBlogPost: async (id: string) => {
+    const response = await api.get(`/admin/blog/posts/${id}`)
+    return response.data
+  },
+
+  createBlogPost: async (data: {
+    title: string
+    slug: string
+    excerpt?: string
+    content: string
+    featured_image?: string
+    featured_image_alt?: string
+    category_id?: string
+    tags?: string[]
+    author_name?: string
+    reading_time_minutes?: number
+    meta_title?: string
+    meta_description?: string
+    meta_keywords?: string[]
+    canonical_url?: string
+    status?: string
+  }) => {
+    const response = await api.post('/admin/blog/posts', data)
+    return response.data
+  },
+
+  updateBlogPost: async (id: string, data: {
+    title?: string
+    slug?: string
+    excerpt?: string
+    content?: string
+    featured_image?: string
+    featured_image_alt?: string
+    category_id?: string
+    tags?: string[]
+    author_name?: string
+    reading_time_minutes?: number
+    meta_title?: string
+    meta_description?: string
+    meta_keywords?: string[]
+    canonical_url?: string
+    status?: string
+  }) => {
+    const response = await api.patch(`/admin/blog/posts/${id}`, data)
+    return response.data
+  },
+
+  deleteBlogPost: async (id: string) => {
+    const response = await api.delete(`/admin/blog/posts/${id}`)
+    return response.data
+  },
+
+  publishBlogPost: async (id: string) => {
+    const response = await api.post(`/admin/blog/posts/${id}/publish`)
+    return response.data
+  },
+
+  unpublishBlogPost: async (id: string) => {
+    const response = await api.post(`/admin/blog/posts/${id}/unpublish`)
+    return response.data
+  },
+
+  bulkUploadBlogPosts: async (data: { posts: Array<{
+    title: string
+    slug: string
+    excerpt?: string
+    content: string
+    featured_image?: string
+    featured_image_alt?: string
+    category_slug?: string
+    tags?: string[]
+    author_name?: string
+    reading_time_minutes?: number
+    meta_title?: string
+    meta_description?: string
+    meta_keywords?: string[]
+    status?: string
+  }> }) => {
+    const response = await api.post('/admin/blog/posts/bulk', data)
+    return response.data
+  },
+
+  uploadBlogImage: async (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await api.post('/admin/blog/upload-image', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+    return response.data
+  },
 }
 
 // Market API
@@ -572,6 +721,46 @@ export const brokerApi = {
   // Get credentials status (whether user has saved credentials)
   getCredentialsStatus: async (brokerName: string) => {
     const response = await api.get(`/broker/${brokerName}/credentials-status`)
+    return response.data
+  },
+}
+
+// Blog API (Public)
+export const blogApi = {
+  getPosts: async (params?: {
+    skip?: number
+    limit?: number
+    category?: string
+    tag?: string
+    search?: string
+  }) => {
+    const response = await api.get('/blog/posts', { params })
+    return response.data
+  },
+
+  getPostsCount: async (params?: {
+    category?: string
+    tag?: string
+    search?: string
+  }) => {
+    const response = await api.get('/blog/posts/count', { params })
+    return response.data
+  },
+
+  getPost: async (slug: string) => {
+    const response = await api.get(`/blog/posts/${slug}`)
+    return response.data
+  },
+
+  getCategories: async (includeEmpty?: boolean) => {
+    const response = await api.get('/blog/categories', {
+      params: { include_empty: includeEmpty },
+    })
+    return response.data
+  },
+
+  getTags: async () => {
+    const response = await api.get('/blog/tags')
     return response.data
   },
 }

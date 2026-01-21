@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Users,
   BarChart3,
+  FileText,
   LogOut,
   Menu,
   X,
@@ -21,6 +22,7 @@ const navigation = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'Strategies', href: '/admin/strategies', icon: BarChart3 },
+  { name: 'Blog', href: '/admin/blog', icon: FileText },
 ]
 
 export default function AdminLayout({

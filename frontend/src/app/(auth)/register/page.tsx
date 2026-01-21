@@ -2,12 +2,13 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { TrendingUp, Mail, Lock, User, Loader2 } from 'lucide-react'
+import { Mail, Lock, User, Loader2 } from 'lucide-react'
 import { authApi, userApi } from '@/lib/api'
 import { useAuthStore } from '@/stores/authStore'
 
@@ -75,8 +76,8 @@ export default function RegisterPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2">
-            <TrendingUp className="h-10 w-10 text-primary" />
-            <span className="text-2xl font-bold">AlgoTrading</span>
+            <Image src="/logo.png" alt="Logo" width={40} height={40} className="h-10 w-10" />
+            <span className="text-2xl font-bold">ArthaQuant</span>
           </Link>
           <h1 className="mt-6 text-3xl font-bold">Create an account</h1>
           <p className="mt-2 text-gray-600 dark:text-gray-400">

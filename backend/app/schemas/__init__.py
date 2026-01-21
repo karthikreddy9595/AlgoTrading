@@ -65,6 +65,21 @@ from app.schemas.optimization import (
     HeatmapDataPoint,
     HeatmapResponse,
 )
+from app.schemas.blog import (
+    BlogCategoryBase,
+    BlogCategoryCreate,
+    BlogCategoryUpdate,
+    BlogCategoryResponse,
+    BlogPostBase,
+    BlogPostCreate,
+    BlogPostUpdate,
+    BlogPostResponse,
+    BlogPostListResponse,
+    BlogPostBulkItem,
+    BlogPostBulkUpload,
+    BlogPostBulkResult,
+    ImageUploadResponse,
+)
 
 __all__ = [
     # User schemas
@@ -129,4 +144,18 @@ __all__ = [
     "OptimizationResultsResponse",
     "HeatmapDataPoint",
     "HeatmapResponse",
+    # Blog schemas
+    "BlogCategoryBase",
+    "BlogCategoryCreate",
+    "BlogCategoryUpdate",
+    "BlogCategoryResponse",
+    "BlogPostBase",
+    "BlogPostCreate",
+    "BlogPostUpdate",
+    "BlogPostResponse",
+    "BlogPostListResponse",
+    "BlogPostBulkItem",
+    "BlogPostBulkUpload",
+    "BlogPostBulkResult",
+    "ImageUploadResponse",
 ]

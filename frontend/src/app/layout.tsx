@@ -7,8 +7,12 @@ import { Providers } from './providers'
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' })
 
 export const metadata: Metadata = {
-  title: 'AlgoTrading Platform',
+  title: 'ArthaQuant Platform',
   description: 'Algorithmic Trading Platform for Indian Markets',
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/logo.png',
+  },
 }
 
 export default function RootLayout({

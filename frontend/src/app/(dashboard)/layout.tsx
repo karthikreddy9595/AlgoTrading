@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import {
-  TrendingUp,
   LayoutDashboard,
   BarChart3,
   FlaskConical,
@@ -106,8 +106,8 @@ export default function DashboardLayout({
           {/* Logo */}
           <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-gray-800">
             <Link href="/dashboard" className="flex items-center gap-2">
-              <TrendingUp className="h-8 w-8 text-primary" />
-              <span className="text-xl font-bold">AlgoTrading</span>
+              <Image src="/logo.png" alt="Logo" width={32} height={32} className="h-8 w-8" />
+              <span className="text-xl font-bold">ArthaQuant</span>
             </Link>
             <button
               onClick={() => setSidebarOpen(false)}
