@@ -174,7 +174,7 @@ async def get_market_indices(
                 "api_key": connection.api_key,
                 "api_secret": connection.api_secret,
                 "access_token": connection.access_token,
-                "client_id": config.get("app_id", connection.api_key),
+                "client_id": config.get("app_id") or connection.api_key,
             },
         )
 
@@ -279,7 +279,7 @@ async def get_historical_data(
                 "api_key": connection.api_key,
                 "api_secret": connection.api_secret,
                 "access_token": connection.access_token,
-                "client_id": config.get("app_id", connection.api_key),
+                "client_id": config.get("app_id") or connection.api_key,
             },
         )
 
@@ -373,7 +373,7 @@ async def search_symbols(
                     "api_key": connection.api_key,
                     "api_secret": connection.api_secret,
                     "access_token": connection.access_token,
-                    "client_id": config.get("app_id", connection.api_key),
+                    "client_id": config.get("app_id") or connection.api_key,
                 },
             )
 
