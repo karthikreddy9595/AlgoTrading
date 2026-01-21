@@ -80,14 +80,14 @@ export default function DashboardPage() {
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-purple-800 bg-clip-text text-transparent">Dashboard</h1>
           <p className="text-gray-500 dark:text-gray-400">
             Overview of your trading portfolio
           </p>
         </div>
         <Link
           href="/dashboard/strategies"
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-full hover:shadow-lg hover:shadow-purple-500/25 transition-all"
         >
           Browse Strategies <ArrowRight className="h-4 w-4" />
         </Link>
@@ -127,27 +127,29 @@ export default function DashboardPage() {
       </div>
 
       {/* Active Strategies */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+      <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-2xl border border-purple-200/50 dark:border-purple-900/30 shadow-xl shadow-purple-500/5">
+        <div className="px-6 py-4 border-b border-purple-200/50 dark:border-purple-900/30 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Your Strategies</h2>
           <Link
             href="/dashboard/strategies"
-            className="text-sm text-primary hover:underline"
+            className="text-sm text-purple-600 dark:text-purple-400 hover:underline"
           >
             View all
           </Link>
         </div>
-        <div className="divide-y divide-gray-200 dark:divide-gray-800">
+        <div className="divide-y divide-purple-200/50 dark:divide-purple-900/30">
           {subscriptions.length === 0 ? (
             <div className="p-8 text-center">
-              <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-purple-100 to-yellow-100 dark:from-purple-900/30 dark:to-yellow-900/20 flex items-center justify-center">
+                <BarChart3 className="h-8 w-8 text-purple-600 dark:text-purple-400" />
+              </div>
               <h3 className="text-lg font-medium mb-2">No strategies yet</h3>
               <p className="text-gray-500 dark:text-gray-400 mb-4">
                 Subscribe to a strategy to start trading
               </p>
               <Link
                 href="/dashboard/strategies"
-                className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-full hover:shadow-lg hover:shadow-purple-500/25 transition-all"
               >
                 Browse Strategies <ArrowRight className="h-4 w-4" />
               </Link>
@@ -163,8 +165,8 @@ export default function DashboardPage() {
       {/* Quick Stats */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Trades */}
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800">
+        <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-2xl border border-purple-200/50 dark:border-purple-900/30 shadow-xl shadow-purple-500/5">
+          <div className="px-6 py-4 border-b border-purple-200/50 dark:border-purple-900/30">
             <h2 className="text-lg font-semibold">Recent Trades</h2>
           </div>
           <div className="p-6 text-center text-gray-500 dark:text-gray-400">
@@ -173,8 +175,8 @@ export default function DashboardPage() {
         </div>
 
         {/* Market Status */}
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800">
+        <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-2xl border border-purple-200/50 dark:border-purple-900/30 shadow-xl shadow-purple-500/5">
+          <div className="px-6 py-4 border-b border-purple-200/50 dark:border-purple-900/30">
             <h2 className="text-lg font-semibold">Market Status</h2>
           </div>
           <div className="p-6">
@@ -210,24 +212,24 @@ function StatCard({
   color: 'blue' | 'green' | 'red' | 'purple'
 }) {
   const colorClasses = {
-    blue: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
-    green: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400',
-    red: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
-    purple: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400',
+    blue: 'bg-gradient-to-br from-blue-100 to-blue-50 text-blue-600 dark:from-blue-900/30 dark:to-blue-900/10 dark:text-blue-400',
+    green: 'bg-gradient-to-br from-green-100 to-green-50 text-green-600 dark:from-green-900/30 dark:to-green-900/10 dark:text-green-400',
+    red: 'bg-gradient-to-br from-red-100 to-red-50 text-red-600 dark:from-red-900/30 dark:to-red-900/10 dark:text-red-400',
+    purple: 'bg-gradient-to-br from-purple-100 to-purple-50 text-purple-600 dark:from-purple-900/30 dark:to-purple-900/10 dark:text-purple-400',
   }
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
+    <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-2xl border border-purple-200/50 dark:border-purple-900/30 p-6 shadow-xl shadow-purple-500/5 hover:shadow-purple-500/10 transition-shadow">
       <div className="flex items-center justify-between mb-4">
         <span className="text-sm text-gray-500 dark:text-gray-400">{title}</span>
-        <div className={cn('p-2 rounded-lg', colorClasses[color])}>{icon}</div>
+        <div className={cn('p-2.5 rounded-xl', colorClasses[color])}>{icon}</div>
       </div>
       <div className="text-2xl font-bold">{value}</div>
       {change && (
         <div
           className={cn(
-            'text-sm mt-1',
-            isPositive ? 'text-green-600' : 'text-red-600'
+            'text-sm mt-1 font-medium',
+            isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
           )}
         >
           {change}
@@ -244,10 +246,10 @@ function StatCard({
 
 function StrategyRow({ subscription }: { subscription: StrategySubscription }) {
   return (
-    <div className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50">
+    <div className="px-6 py-4 flex items-center justify-between hover:bg-purple-50/50 dark:hover:bg-purple-900/10 transition-colors">
       <div className="flex items-center gap-4">
-        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-          <BarChart3 className="h-5 w-5 text-primary" />
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/25">
+          <BarChart3 className="h-5 w-5 text-white" />
         </div>
         <div>
           <div className="flex items-center gap-2">
@@ -255,12 +257,12 @@ function StrategyRow({ subscription }: { subscription: StrategySubscription }) {
               {subscription.strategy?.name || 'Strategy'}
             </span>
             {subscription.is_paper_trading && (
-              <span className="px-2 py-0.5 text-xs rounded bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+              <span className="px-2 py-0.5 text-xs rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
                 Paper
               </span>
             )}
             {subscription.status === 'active' && (
-              <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs rounded bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+              <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-600 dark:bg-green-400 animate-pulse"></span>
                 LIVE
               </span>
@@ -268,7 +270,7 @@ function StrategyRow({ subscription }: { subscription: StrategySubscription }) {
             {subscription.status !== 'active' && (
               <span
                 className={cn(
-                  'px-2 py-0.5 text-xs rounded capitalize',
+                  'px-2 py-0.5 text-xs rounded-full capitalize',
                   getStatusColor(subscription.status)
                 )}
               >
@@ -284,8 +286,8 @@ function StrategyRow({ subscription }: { subscription: StrategySubscription }) {
       <div className="text-right">
         <div
           className={cn(
-            'font-medium',
-            subscription.today_pnl >= 0 ? 'text-green-600' : 'text-red-600'
+            'font-semibold',
+            subscription.today_pnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
           )}
         >
           {formatCurrency(subscription.today_pnl)}

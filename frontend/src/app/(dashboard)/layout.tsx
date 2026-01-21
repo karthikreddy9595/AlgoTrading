@@ -21,6 +21,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { authApi, userApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { IndexTicker } from '@/components/IndexTicker'
+import { ThemeToggle } from '@/components/ThemeToggle'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -79,18 +80,24 @@ export default function DashboardLayout({
 
   if (!isInitialized) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-white to-yellow-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50/50 via-white to-yellow-50/50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+      {/* Background Effects */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-purple-200/30 dark:bg-purple-900/20 rounded-full blur-[128px]" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-yellow-200/30 dark:bg-yellow-900/10 rounded-full blur-[128px]" />
+      </div>
+
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -98,20 +105,20 @@ export default function DashboardLayout({
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transform transition-transform duration-200 ease-in-out lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 w-64 bg-white/80 dark:bg-gray-900/90 backdrop-blur-xl border-r border-purple-200/50 dark:border-purple-900/30 transform transition-transform duration-200 ease-in-out lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-gray-800">
+          <div className="flex items-center justify-between h-16 px-4 border-b border-purple-200/50 dark:border-purple-900/30">
             <Link href="/dashboard" className="flex items-center gap-2">
               <Image src="/logo.png" alt="Logo" width={32} height={32} className="h-8 w-8" />
-              <span className="text-xl font-bold">ArthaQuant</span>
+              <span className="text-xl font-bold bg-gradient-to-r from-purple-600 to-yellow-500 bg-clip-text text-transparent">ArthaQuant</span>
             </Link>
             <button
               onClick={() => setSidebarOpen(false)}
-              className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+              className="lg:hidden p-2 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30"
             >
               <X className="h-5 w-5" />
             </button>
@@ -126,10 +133,10 @@ export default function DashboardLayout({
                   key={item.name}
                   href={item.href}
                   className={cn(
-                    'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                    'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all',
                     isActive
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-lg shadow-purple-500/25'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-purple-100 dark:hover:bg-purple-900/30 hover:text-purple-700 dark:hover:text-purple-300'
                   )}
                 >
                   <item.icon className="h-5 w-5" />
@@ -140,19 +147,19 @@ export default function DashboardLayout({
           </nav>
 
           {/* User section */}
-          <div className="p-4 border-t border-gray-200 dark:border-gray-800">
+          <div className="p-4 border-t border-purple-200/50 dark:border-purple-900/30">
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <User className="h-5 w-5 text-primary" />
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-yellow-500 flex items-center justify-center">
+                <User className="h-5 w-5 text-white" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{user?.full_name}</p>
-                <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
               </div>
             </div>
             <button
               onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
             >
               <LogOut className="h-5 w-5" />
               Logout
@@ -162,13 +169,13 @@ export default function DashboardLayout({
       </aside>
 
       {/* Main content */}
-      <div className="lg:pl-64">
+      <div className="lg:pl-64 relative z-10">
         {/* Top header */}
-        <header className="sticky top-0 z-30 h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+        <header className="sticky top-0 z-30 h-16 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-purple-200/50 dark:border-purple-900/30">
           <div className="flex items-center justify-between h-full px-4">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+              className="lg:hidden p-2 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30"
             >
               <Menu className="h-5 w-5" />
             </button>
@@ -178,15 +185,18 @@ export default function DashboardLayout({
               <IndexTicker />
             </div>
 
-            <div className="flex items-center gap-4 sm:ml-0 ml-auto">
-              <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 relative">
-                <Bell className="h-5 w-5" />
+            <div className="flex items-center gap-3 sm:ml-0 ml-auto">
+              {/* Dark Mode Toggle */}
+              <ThemeToggle />
+
+              <button className="p-2 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 relative">
+                <Bell className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
               </button>
-              <div className="h-8 w-px bg-gray-200 dark:bg-gray-700"></div>
+              <div className="h-8 w-px bg-purple-200 dark:bg-purple-900/50"></div>
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                  <User className="h-4 w-4 text-primary" />
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-yellow-500 flex items-center justify-center">
+                  <User className="h-4 w-4 text-white" />
                 </div>
                 <span className="hidden sm:block text-sm font-medium">
                   {user?.full_name?.split(' ')[0]}

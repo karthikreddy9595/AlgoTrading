@@ -72,23 +72,32 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 py-12 px-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 relative overflow-hidden">
+      {/* Background Effects */}
+      <div className="absolute inset-0 bg-gradient-to-br from-purple-50 via-white to-yellow-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-300/30 dark:bg-purple-900/20 rounded-full blur-[128px] animate-pulse" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-yellow-300/30 dark:bg-yellow-900/10 rounded-full blur-[128px] animate-pulse delay-1000" />
+      </div>
+
+      {/* Grid Pattern */}
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(147,51,234,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(147,51,234,0.03)_1px,transparent_1px)] bg-[size:64px_64px] dark:bg-[linear-gradient(rgba(147,51,234,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(147,51,234,0.05)_1px,transparent_1px)]" />
+
+      <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2">
             <Image src="/logo.png" alt="Logo" width={40} height={40} className="h-10 w-10" />
-            <span className="text-2xl font-bold">ArthaQuant</span>
+            <span className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-yellow-500 bg-clip-text text-transparent">ArthaQuant</span>
           </Link>
-          <h1 className="mt-6 text-3xl font-bold">Create an account</h1>
+          <h1 className="mt-6 text-3xl font-bold bg-gradient-to-r from-purple-600 to-purple-800 bg-clip-text text-transparent">Create an account</h1>
           <p className="mt-2 text-gray-600 dark:text-gray-400">
             Start your trading journey today
           </p>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-8">
+        <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl rounded-2xl shadow-2xl shadow-purple-500/10 border border-purple-200/50 dark:border-purple-900/30 p-8">
           <button
             onClick={handleGoogleLogin}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-purple-200 dark:border-purple-800 rounded-xl hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
@@ -113,10 +122,10 @@ export default function RegisterPage() {
 
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300 dark:border-gray-700" />
+              <div className="w-full border-t border-purple-200 dark:border-purple-800" />
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white dark:bg-gray-900 text-gray-500">
+              <span className="px-2 bg-white/80 dark:bg-gray-900/80 text-gray-500">
                 Or continue with email
               </span>
             </div>
@@ -126,11 +135,11 @@ export default function RegisterPage() {
             <div>
               <label className="block text-sm font-medium mb-1">Full Name</label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-purple-400" />
                 <input
                   type="text"
                   {...register('full_name')}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-purple-200 dark:border-purple-800 rounded-xl bg-white/50 dark:bg-gray-800/50 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
                   placeholder="John Doe"
                 />
               </div>
@@ -142,11 +151,11 @@ export default function RegisterPage() {
             <div>
               <label className="block text-sm font-medium mb-1">Email</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-purple-400" />
                 <input
                   type="email"
                   {...register('email')}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-purple-200 dark:border-purple-800 rounded-xl bg-white/50 dark:bg-gray-800/50 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
                   placeholder="you@example.com"
                 />
               </div>
@@ -158,11 +167,11 @@ export default function RegisterPage() {
             <div>
               <label className="block text-sm font-medium mb-1">Password</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-purple-400" />
                 <input
                   type="password"
                   {...register('password')}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-purple-200 dark:border-purple-800 rounded-xl bg-white/50 dark:bg-gray-800/50 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
                   placeholder="••••••••"
                 />
               </div>
@@ -174,11 +183,11 @@ export default function RegisterPage() {
             <div>
               <label className="block text-sm font-medium mb-1">Confirm Password</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-purple-400" />
                 <input
                   type="password"
                   {...register('confirmPassword')}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-purple-200 dark:border-purple-800 rounded-xl bg-white/50 dark:bg-gray-800/50 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
                   placeholder="••••••••"
                 />
               </div>
@@ -188,14 +197,14 @@ export default function RegisterPage() {
             </div>
 
             <div className="flex items-start">
-              <input type="checkbox" required className="mt-1 rounded border-gray-300" />
+              <input type="checkbox" required className="mt-1 rounded border-purple-300 text-purple-600 focus:ring-purple-500" />
               <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">
                 I agree to the{' '}
-                <Link href="/terms" className="text-primary hover:underline">
+                <Link href="/terms" className="text-purple-600 dark:text-purple-400 hover:underline">
                   Terms of Service
                 </Link>{' '}
                 and{' '}
-                <Link href="/privacy" className="text-primary hover:underline">
+                <Link href="/privacy" className="text-purple-600 dark:text-purple-400 hover:underline">
                   Privacy Policy
                 </Link>
               </span>
@@ -204,7 +213,7 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 px-4 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-purple-500/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all"
             >
               {isLoading ? (
                 <>
@@ -219,7 +228,7 @@ export default function RegisterPage() {
 
           <p className="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
             Already have an account?{' '}
-            <Link href="/login" className="text-primary hover:underline font-medium">
+            <Link href="/login" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">
               Sign in
             </Link>
           </p>

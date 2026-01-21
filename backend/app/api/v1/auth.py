@@ -250,9 +250,28 @@ async def google_callback(
 
     # Redirect to frontend with tokens
     frontend_url = settings.CORS_ORIGINS[0] if settings.CORS_ORIGINS else "http://localhost:3000"
-    redirect_url = f"{frontend_url}/auth/callback?access_token={access_token}&refresh_token={refresh_token}"
+    #redirect_url = f"{frontend_url}/auth/callback?access_token={access_token}&refresh_token={refresh_token}"
+    
+    response = RedirectResponse(
+    url=f"{frontend_url}/dashboard",
+    status_code=302)
+    
+    response.set_cookie(
+    key="access_token",
+    value=access_token,
+    httponly=True,
+    secure=False,  # True in production (HTTPS)
+    samesite="lax")
 
-    return RedirectResponse(url=redirect_url)
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=False,
+        samesite="lax")
+
+
+    return response
 
 
 @router.post("/logout")
