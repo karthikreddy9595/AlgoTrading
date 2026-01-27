@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Search, Filter, TrendingUp, Clock, DollarSign, Star } from 'lucide-react'
+import { Search, Filter, TrendingUp, Clock, DollarSign, Star, Plus } from 'lucide-react'
 import { strategyApi } from '@/lib/api'
 import { formatCurrency, formatPercent, cn } from '@/lib/utils'
+import { QuickSubscribeModal } from '@/components/modals/QuickSubscribeModal'
 
 interface Strategy {
   id: string
@@ -16,6 +17,7 @@ interface Strategy {
   expected_return_percent: number
   max_drawdown_percent: number
   timeframe: string
+  supported_symbols: string[]
   tags: string[]
   is_featured: boolean
 }
@@ -25,6 +27,8 @@ export default function StrategiesPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
+  const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null)
+  const [isSubscribeModalOpen, setIsSubscribeModalOpen] = useState(false)
 
   useEffect(() => {
     const fetchStrategies = async () => {
@@ -50,6 +54,21 @@ export default function StrategiesPage() {
   })
 
   const allTags = [...new Set(strategies.flatMap((s) => s.tags || []))]
+
+  const handleOpenSubscribe = (strategy: Strategy) => {
+    setSelectedStrategy(strategy)
+    setIsSubscribeModalOpen(true)
+  }
+
+  const handleCloseSubscribe = () => {
+    setIsSubscribeModalOpen(false)
+    setSelectedStrategy(null)
+  }
+
+  const handleSubscribeSuccess = () => {
+    // Optionally refresh strategies or redirect
+    console.log('Subscription successful!')
+  }
 
   if (isLoading) {
     return (
@@ -122,21 +141,43 @@ export default function StrategiesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredStrategies.map((strategy) => (
-            <StrategyCard key={strategy.id} strategy={strategy} />
+            <StrategyCard
+              key={strategy.id}
+              strategy={strategy}
+              onSubscribe={handleOpenSubscribe}
+            />
           ))}
         </div>
+      )}
+
+      {/* Quick Subscribe Modal */}
+      {selectedStrategy && (
+        <QuickSubscribeModal
+          isOpen={isSubscribeModalOpen}
+          onClose={handleCloseSubscribe}
+          strategy={selectedStrategy}
+          onSuccess={handleSubscribeSuccess}
+        />
       )}
     </div>
   )
 }
 
-function StrategyCard({ strategy }: { strategy: Strategy }) {
+interface StrategyCardProps {
+  strategy: Strategy
+  onSubscribe: (strategy: Strategy) => void
+}
+
+function StrategyCard({ strategy, onSubscribe }: StrategyCardProps) {
+  const handleSubscribeClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    onSubscribe(strategy)
+  }
+
   return (
-    <Link
-      href={`/dashboard/strategies/${strategy.slug}`}
-      className="block bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 hover:border-primary dark:hover:border-primary transition-colors overflow-hidden"
-    >
-      <div className="p-6">
+    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 hover:border-primary dark:hover:border-primary transition-colors overflow-hidden">
+      <Link href={`/dashboard/strategies/${strategy.slug}`} className="block p-6">
         {/* Header */}
         <div className="flex items-start justify-between mb-4">
           <div>
@@ -205,14 +246,24 @@ function StrategyCard({ strategy }: { strategy: Strategy }) {
             ))}
           </div>
         )}
-      </div>
+      </Link>
 
       {/* Footer */}
-      <div className="px-6 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-800">
-        <span className="text-sm font-medium text-primary">
-          View Details →
-        </span>
+      <div className="px-6 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-800 flex items-center gap-3">
+        <Link
+          href={`/dashboard/strategies/${strategy.slug}`}
+          className="flex-1 text-center px-4 py-2 border border-purple-600 text-purple-600 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors text-sm font-medium"
+        >
+          View Details
+        </Link>
+        <button
+          onClick={handleSubscribeClick}
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all text-sm font-medium"
+        >
+          <Plus className="h-4 w-4" />
+          Subscribe
+        </button>
       </div>
-    </Link>
+    </div>
   )
 }

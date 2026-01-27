@@ -16,6 +16,10 @@ import {
   X,
   Bell,
   User,
+  Activity,
+  ChevronLeft,
+  ChevronRight,
+  ListChecks,
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { authApi, userApi } from '@/lib/api'
@@ -25,9 +29,11 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Live Strategies', href: '/dashboard/live-strategies', icon: Activity },
   { name: 'Strategies', href: '/dashboard/strategies', icon: BarChart3 },
   { name: 'Backtest', href: '/dashboard/backtest', icon: FlaskConical },
   { name: 'Portfolio', href: '/dashboard/portfolio', icon: Wallet },
+  { name: 'Order Logs', href: '/dashboard/orders/test', icon: ListChecks },
   { name: 'Reports', href: '/dashboard/reports', icon: FileText },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ]
@@ -41,7 +47,21 @@ export default function DashboardLayout({
   const pathname = usePathname()
   const { user, isAuthenticated, setAuth, logout, setLoading } = useAuthStore()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
+
+  // Load sidebar collapsed state from localStorage
+  useEffect(() => {
+    const collapsed = localStorage.getItem('sidebarCollapsed') === 'true'
+    setSidebarCollapsed(collapsed)
+  }, [])
+
+  // Save sidebar collapsed state to localStorage
+  const toggleSidebarCollapse = () => {
+    const newState = !sidebarCollapsed
+    setSidebarCollapsed(newState)
+    localStorage.setItem('sidebarCollapsed', String(newState))
+  }
 
   useEffect(() => {
     const initAuth = async () => {
@@ -105,16 +125,21 @@ export default function DashboardLayout({
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-64 bg-white/80 dark:bg-gray-900/90 backdrop-blur-xl border-r border-purple-200/50 dark:border-purple-900/30 transform transition-transform duration-200 ease-in-out lg:translate-x-0',
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          'fixed inset-y-0 left-0 z-50 bg-white/80 dark:bg-gray-900/90 backdrop-blur-xl border-r border-purple-200/50 dark:border-purple-900/30 transform transition-all duration-200 ease-in-out lg:translate-x-0',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+          sidebarCollapsed ? 'w-20' : 'w-64'
         )}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="flex items-center justify-between h-16 px-4 border-b border-purple-200/50 dark:border-purple-900/30">
-            <Link href="/dashboard" className="flex items-center gap-2">
-              <Image src="/logo.png" alt="Logo" width={32} height={32} className="h-8 w-8" />
-              <span className="text-xl font-bold bg-gradient-to-r from-purple-600 to-yellow-500 bg-clip-text text-transparent">ArthaQuant</span>
+            <Link href="/dashboard" className="flex items-center gap-2 min-w-0">
+              <Image src="/logo.png" alt="Logo" width={32} height={32} className="h-8 w-8 flex-shrink-0" />
+              {!sidebarCollapsed && (
+                <span className="text-xl font-bold bg-gradient-to-r from-purple-600 to-yellow-500 bg-clip-text text-transparent whitespace-nowrap">
+                  ArthaQuant
+                </span>
+              )}
             </Link>
             <button
               onClick={() => setSidebarOpen(false)}
@@ -132,44 +157,69 @@ export default function DashboardLayout({
                 <Link
                   key={item.name}
                   href={item.href}
+                  title={sidebarCollapsed ? item.name : undefined}
                   className={cn(
                     'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all',
                     isActive
                       ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-lg shadow-purple-500/25'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-purple-100 dark:hover:bg-purple-900/30 hover:text-purple-700 dark:hover:text-purple-300'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-purple-100 dark:hover:bg-purple-900/30 hover:text-purple-700 dark:hover:text-purple-300',
+                    sidebarCollapsed && 'justify-center'
                   )}
                 >
-                  <item.icon className="h-5 w-5" />
-                  {item.name}
+                  <item.icon className="h-5 w-5 flex-shrink-0" />
+                  {!sidebarCollapsed && <span className="whitespace-nowrap">{item.name}</span>}
                 </Link>
               )
             })}
           </nav>
 
-          {/* User section */}
-          <div className="p-4 border-t border-purple-200/50 dark:border-purple-900/30">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-yellow-500 flex items-center justify-center">
-                <User className="h-5 w-5 text-white" />
+          {/* Collapse Toggle & User section */}
+          <div className="p-4 border-t border-purple-200/50 dark:border-purple-900/30 space-y-2">
+            {/* Desktop collapse toggle */}
+            <button
+              onClick={toggleSidebarCollapse}
+              className="hidden lg:flex items-center justify-center w-full px-3 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
+              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {sidebarCollapsed ? (
+                <ChevronRight className="h-5 w-5" />
+              ) : (
+                <>
+                  <ChevronLeft className="h-5 w-5" />
+                  <span className="ml-2">Collapse</span>
+                </>
+              )}
+            </button>
+
+            {!sidebarCollapsed && (
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-yellow-500 flex items-center justify-center flex-shrink-0">
+                  <User className="h-5 w-5 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{user?.full_name}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user?.full_name}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
-              </div>
-            </div>
+            )}
+
             <button
               onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              title={sidebarCollapsed ? 'Logout' : undefined}
+              className={cn(
+                'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors',
+                sidebarCollapsed && 'justify-center'
+              )}
             >
-              <LogOut className="h-5 w-5" />
-              Logout
+              <LogOut className="h-5 w-5 flex-shrink-0" />
+              {!sidebarCollapsed && <span>Logout</span>}
             </button>
           </div>
         </div>
       </aside>
 
       {/* Main content */}
-      <div className="lg:pl-64 relative z-10">
+      <div className={cn('relative z-10 transition-all duration-200', sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-64')}>
         {/* Top header */}
         <header className="sticky top-0 z-30 h-16 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-purple-200/50 dark:border-purple-900/30">
           <div className="flex items-center justify-between h-full px-4">

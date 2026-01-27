@@ -55,6 +55,7 @@ class StrategySubscription(Base):
     status = Column(String(20), default="inactive")  # inactive, active, paused, stopped
     capital_allocated = Column(Numeric(15, 2), nullable=False)
     is_paper_trading = Column(Boolean, default=True)
+    dry_run = Column(Boolean, default=False)  # If True, orders are logged but not placed
 
     # Risk settings
     max_drawdown_percent = Column(Numeric(5, 2), default=10)

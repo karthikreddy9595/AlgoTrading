@@ -138,6 +138,7 @@ export const strategyApi = {
 
   subscribe: async (data: {
     strategy_id: string
+    broker_connection_id?: string
     capital_allocated: number
     is_paper_trading: boolean
     max_drawdown_percent?: number
@@ -590,6 +591,31 @@ export const marketApi = {
     })
     return response.data
   },
+
+  getChartData: async (params: {
+    symbol: string
+    subscription_id: string
+    exchange?: string
+    interval?: string
+    from_date?: Date
+    to_date?: Date
+    limit?: number
+  }) => {
+    const queryParams: Record<string, string | number> = {
+      subscription_id: params.subscription_id,
+    }
+
+    if (params.exchange) queryParams.exchange = params.exchange
+    if (params.interval) queryParams.interval = params.interval
+    if (params.from_date) queryParams.from_date = params.from_date.toISOString().split('T')[0]
+    if (params.to_date) queryParams.to_date = params.to_date.toISOString().split('T')[0]
+    if (params.limit) queryParams.limit = params.limit
+
+    const response = await api.get(`/market/chart/${params.symbol}`, {
+      params: queryParams,
+    })
+    return response.data
+  },
 }
 
 // Backtest API
@@ -667,6 +693,12 @@ export const brokerApi = {
   // List all available broker plugins
   listAvailable: async () => {
     const response = await api.get('/broker/available')
+    return response.data
+  },
+
+  // Get user's broker connections
+  getConnections: async () => {
+    const response = await api.get('/users/me/broker-connections')
     return response.data
   },
 
@@ -811,6 +843,42 @@ export const optimizationApi = {
 
   delete: async (optimizationId: string) => {
     const response = await api.delete(`/optimization/${optimizationId}`)
+    return response.data
+  },
+}
+
+// Order Logs API
+export const orderLogsApi = {
+  getOrderLogs: async (params?: {
+    subscription_id?: string
+    event_type?: string
+    is_dry_run?: boolean
+    is_test_order?: boolean
+    success?: boolean
+    from_date?: string
+    to_date?: string
+    page?: number
+    page_size?: number
+  }) => {
+    const response = await api.get('/order-logs', { params })
+    return response.data
+  },
+
+  getOrderLog: async (logId: string) => {
+    const response = await api.get(`/order-logs/${logId}`)
+    return response.data
+  },
+
+  testBrokerOrder: async (data: {
+    broker_connection_id: string
+    symbol: string
+    exchange: string
+    transaction_type: 'BUY' | 'SELL'
+    quantity: number
+    order_type: 'MARKET' | 'LIMIT'
+    price?: number
+  }) => {
+    const response = await api.post('/order-logs/test-broker-order', data)
     return response.data
   },
 }

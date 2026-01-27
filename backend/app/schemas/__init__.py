@@ -35,6 +35,10 @@ from app.schemas.order import (
     PortfolioSummary,
     PnLSummary,
     ReportRequest,
+    OrderLogResponse,
+    OrderLogListResponse,
+    BrokerTestOrderRequest,
+    BrokerTestOrderResponse,
 )
 from app.schemas.backtest import (
     BacktestStatus,
@@ -117,6 +121,10 @@ __all__ = [
     "PortfolioSummary",
     "PnLSummary",
     "ReportRequest",
+    "OrderLogResponse",
+    "OrderLogListResponse",
+    "BrokerTestOrderRequest",
+    "BrokerTestOrderResponse",
     # Backtest schemas
     "BacktestStatus",
     "BacktestInterval",

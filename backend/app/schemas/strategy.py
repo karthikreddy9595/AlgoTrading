@@ -61,6 +61,7 @@ class StrategyListResponse(BaseModel):
     expected_return_percent: Optional[Decimal]
     max_drawdown_percent: Optional[Decimal]
     timeframe: Optional[str]
+    supported_symbols: Optional[List[str]] = None
     tags: Optional[List[str]]
     is_featured: bool
 
@@ -94,6 +95,7 @@ class StrategySubscriptionCreate(BaseModel):
     broker_connection_id: Optional[UUID] = None
     capital_allocated: Decimal = Field(..., ge=10000)
     is_paper_trading: bool = True
+    dry_run: bool = Field(default=False, description="If True, orders are logged but not placed with broker")
     # Risk management parameters
     max_drawdown_percent: Decimal = Field(default=10, ge=1, le=50)
     daily_loss_limit: Optional[Decimal] = None
@@ -111,6 +113,7 @@ class StrategySubscriptionCreate(BaseModel):
 class StrategySubscriptionUpdate(BaseModel):
     capital_allocated: Optional[Decimal] = Field(None, ge=10000)
     is_paper_trading: Optional[bool] = None
+    dry_run: Optional[bool] = None
     # Risk management parameters
     max_drawdown_percent: Optional[Decimal] = Field(None, ge=1, le=50)
     daily_loss_limit: Optional[Decimal] = None
@@ -133,6 +136,7 @@ class StrategySubscriptionResponse(BaseModel):
     status: str
     capital_allocated: Decimal
     is_paper_trading: bool
+    dry_run: bool
     # Risk management
     max_drawdown_percent: Decimal
     daily_loss_limit: Optional[Decimal]

@@ -9,6 +9,7 @@ import asyncio
 from typing import Optional, List, Dict, Any, Callable
 from datetime import datetime
 import redis.asyncio as redis
+from decimal import Decimal
 
 from execution_engine.supervisor import StrategySupervisor
 from execution_engine.kill_switch import KillSwitch
@@ -31,9 +32,11 @@ class ExecutionEngine:
         self,
         redis_url: str,
         broker: Optional[BaseBroker] = None,
+        db_session: Optional[Any] = None,
     ):
         self.redis_url = redis_url
         self.broker = broker
+        self.db_session = db_session
 
         self._redis: Optional[redis.Redis] = None
         self._supervisor: Optional[StrategySupervisor] = None
@@ -115,6 +118,7 @@ class ExecutionEngine:
             context_data=config.get("context", {}),
             risk_limits_data=config.get("risk_limits", {}),
             symbols=config.get("symbols", []),
+            dry_run=config.get("dry_run", False),
         )
 
     async def stop_strategy(self, subscription_id: str) -> bool:
@@ -164,6 +168,13 @@ class ExecutionEngine:
 
     async def _handle_order(self, order_data: dict):
         """Handle order from strategy."""
+        # Log order generation
+        await self._log_order_event(
+            order_data=order_data,
+            event_type="generated",
+            is_dry_run=order_data.get("is_dry_run", False)
+        )
+
         # Call all registered handlers
         for handler in self._order_handlers:
             try:
@@ -173,6 +184,17 @@ class ExecutionEngine:
                     handler(order_data)
             except Exception as e:
                 print(f"Order handler error: {e}")
+
+        # Check if this is a dry-run
+        if order_data.get("is_dry_run", False):
+            await self._log_order_event(
+                order_data=order_data,
+                event_type="dry_run",
+                is_dry_run=True,
+                success=True
+            )
+            print(f"[DRY-RUN] Order simulated: {order_data.get('order', {}).get('symbol')} {order_data.get('order', {}).get('transaction_type')} {order_data.get('order', {}).get('quantity')}")
+            return
 
         # If broker is connected, place the order
         if self.broker and self.broker.is_connected:
@@ -187,23 +209,50 @@ class ExecutionEngine:
             signal = order.get("signal")
             transaction_type = "BUY" if signal in ["BUY"] else "SELL"
 
-            result = await self.broker.place_order(
-                symbol=order.get("symbol"),
-                exchange=order.get("exchange", "NSE"),
-                transaction_type=transaction_type,
-                quantity=order.get("quantity"),
-                order_type=order.get("order_type", "MARKET"),
-                price=order.get("price"),
-                trigger_price=order.get("stop_loss"),
+            # Log submission attempt
+            await self._log_order_event(
+                order_data=order_data,
+                event_type="submitted",
+                success=None
             )
 
+            broker_request = {
+                "symbol": order.get("symbol"),
+                "exchange": order.get("exchange", "NSE"),
+                "transaction_type": transaction_type,
+                "quantity": order.get("quantity"),
+                "order_type": order.get("order_type", "MARKET"),
+                "price": order.get("price"),
+                "trigger_price": order.get("stop_loss"),
+            }
+
+            result = await self.broker.place_order(**broker_request)
+
             print(f"Order placed for {subscription_id}: {result}")
+
+            # Log successful placement
+            await self._log_order_event(
+                order_data=order_data,
+                event_type="placed",
+                success=True,
+                broker_order_id=result.broker_order_id if hasattr(result, 'broker_order_id') else None,
+                broker_request=broker_request,
+                broker_response=vars(result) if hasattr(result, '__dict__') else {"result": str(result)}
+            )
 
             # TODO: Update database with order details
             # TODO: Send notification
 
         except Exception as e:
             print(f"Failed to place order: {e}")
+
+            # Log failure
+            await self._log_order_event(
+                order_data=order_data,
+                event_type="failed",
+                success=False,
+                error_message=str(e)
+            )
 
     async def connect_broker(self, broker: BaseBroker, credentials: dict) -> bool:
         """Connect to a broker."""
@@ -273,3 +322,60 @@ class ExecutionEngine:
             "global_reason": global_state.reason if global_state else None,
             "global_activated_at": global_state.activated_at.isoformat() if global_state else None,
         }
+
+    async def _log_order_event(
+        self,
+        order_data: dict,
+        event_type: str,
+        is_dry_run: bool = False,
+        success: Optional[bool] = None,
+        broker_order_id: Optional[str] = None,
+        broker_request: Optional[dict] = None,
+        broker_response: Optional[dict] = None,
+        error_message: Optional[str] = None
+    ):
+        """Log order event to database for testing and debugging."""
+        if not self.db_session:
+            return
+
+        try:
+            from app.models.order import OrderLog
+            from uuid import UUID
+
+            order = order_data.get("order", {})
+            subscription_id = order_data.get("subscription_id")
+
+            # Create log entry
+            log_entry = OrderLog(
+                subscription_id=UUID(subscription_id) if isinstance(subscription_id, str) else subscription_id,
+                order_id=None,  # Will be set when actual Order is created
+                symbol=order.get("symbol", ""),
+                exchange=order.get("exchange", "NSE"),
+                order_type=order.get("order_type", "MARKET"),
+                transaction_type=order.get("signal", "BUY"),
+                quantity=order.get("quantity", 0),
+                price=Decimal(str(order.get("price"))) if order.get("price") else None,
+                trigger_price=Decimal(str(order.get("stop_loss"))) if order.get("stop_loss") else None,
+                event_type=event_type,
+                is_dry_run=is_dry_run,
+                is_test_order=order_data.get("is_test_order", False),
+                success=success,
+                broker_order_id=broker_order_id,
+                broker_name=self.broker.name if self.broker else None,
+                broker_request=broker_request,
+                broker_response=broker_response,
+                error_message=error_message,
+                strategy_name=order_data.get("strategy_name"),
+                reason=order.get("reason"),
+                market_price=Decimal(str(order.get("market_price"))) if order.get("market_price") else None,
+            )
+
+            self.db_session.add(log_entry)
+            await self.db_session.commit()
+        except Exception as e:
+            print(f"Failed to log order event: {e}")
+            # Don't fail the order flow if logging fails
+            try:
+                await self.db_session.rollback()
+            except:
+                pass

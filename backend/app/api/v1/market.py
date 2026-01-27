@@ -6,14 +6,23 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from pydantic import BaseModel
+from decimal import Decimal
+import importlib
 
 from app.core.database import get_db
 from app.api.deps import get_current_user
-from app.models import User, BrokerConnection
+from app.models import User, BrokerConnection, StrategySubscription, Order, Trade, Strategy
 from brokers.factory import BrokerFactory
 from app.core.config import settings
+from app.schemas.market import (
+    ChartDataResponse,
+    ChartIndicator,
+    TradeMarker,
+    HistoricalCandle as ChartHistoricalCandle,
+)
+from app.services.indicators import calculate_indicators_for_strategy
 
 
 router = APIRouter(prefix="/market", tags=["Market"])
@@ -426,3 +435,266 @@ async def get_popular_symbols(
         symbols = [s for s in symbols if s.exchange == exchange]
 
     return SymbolSearchResponse(symbols=symbols[:limit])
+
+
+@router.get("/chart/{symbol}", response_model=ChartDataResponse)
+async def get_chart_data(
+    symbol: str,
+    subscription_id: str = Query(..., description="Strategy subscription ID"),
+    exchange: str = Query("NSE", pattern="^(NSE|BSE|NFO|MCX|CDS)$"),
+    interval: Optional[str] = Query(None, pattern="^(1min|5min|15min|30min|1hour|1day)$"),
+    from_date: Optional[date] = Query(None, description="Start date (defaults to 7 days ago)"),
+    to_date: Optional[date] = Query(None, description="End date (defaults to today)"),
+    limit: int = Query(200, ge=10, le=1000, description="Maximum number of candles"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get chart data with indicators and trade markers for a symbol.
+
+    This endpoint bundles OHLC candles, pre-calculated indicators (based on
+    the strategy's configuration), and historical trade markers for displaying
+    on a TradingView-style chart.
+
+    Query Parameters:
+    - symbol: Trading symbol (e.g., "RELIANCE", "NIFTY50-INDEX")
+    - subscription_id: Strategy subscription ID (to determine indicators)
+    - exchange: Exchange (NSE, BSE, etc.)
+    - interval: Candle interval (optional, defaults to strategy's timeframe)
+    - from_date: Start date (optional, defaults to 7 days ago)
+    - to_date: End date (optional, defaults to today)
+    - limit: Maximum candles to return (default: 200)
+
+    Returns:
+    - OHLC candles
+    - Pre-calculated indicators (SMA, RSI, etc.) based on strategy config
+    - Trade markers (entry/exit points with P&L)
+    """
+    # Fetch strategy subscription
+    result = await db.execute(
+        select(StrategySubscription)
+        .where(
+            StrategySubscription.id == subscription_id,
+            StrategySubscription.user_id == current_user.id,
+        )
+    )
+    subscription = result.scalar_one_or_none()
+
+    if not subscription:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Strategy subscription not found",
+        )
+
+    # Fetch strategy details
+    result = await db.execute(
+        select(Strategy).where(Strategy.id == subscription.strategy_id)
+    )
+    strategy_model = result.scalar_one_or_none()
+
+    if not strategy_model:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Strategy not found",
+        )
+
+    # Determine interval from strategy if not provided
+    if not interval:
+        interval = strategy_model.timeframe or "15min"
+
+    # Set default date range if not provided
+    if not to_date:
+        to_date = date.today()
+    if not from_date:
+        from_date = to_date - timedelta(days=7)
+
+    # Validate date range
+    if to_date <= from_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="End date must be after start date",
+        )
+
+    # Get broker connection
+    if not subscription.broker_connection_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No broker connection associated with this subscription",
+        )
+
+    result = await db.execute(
+        select(BrokerConnection).where(
+            BrokerConnection.id == subscription.broker_connection_id,
+            BrokerConnection.is_active == True,
+        )
+    )
+    connection = result.scalar_one_or_none()
+
+    if not connection:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active broker connection",
+        )
+
+    # Check token expiry
+    if connection.token_expiry and connection.token_expiry < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Broker session expired. Please reconnect your broker.",
+        )
+
+    try:
+        # Connect to broker and fetch historical data
+        config = _get_broker_config(connection.broker)
+        broker = await BrokerFactory.create_and_connect(
+            connection.broker,
+            {
+                "api_key": connection.api_key,
+                "api_secret": connection.api_secret,
+                "access_token": connection.access_token,
+                "client_id": config.get("app_id") or connection.api_key,
+            },
+        )
+
+        # Fetch OHLC data
+        historical_data = await broker.get_historical_data(
+            symbol=symbol.upper(),
+            exchange=exchange.upper(),
+            interval=interval,
+            from_date=datetime.combine(from_date, datetime.min.time()),
+            to_date=datetime.combine(to_date, datetime.max.time()),
+        )
+
+        await broker.disconnect()
+
+        if not historical_data:
+            return ChartDataResponse(
+                symbol=symbol.upper(),
+                exchange=exchange.upper(),
+                interval=interval,
+                strategy_name=strategy_model.name,
+                strategy_slug=strategy_model.slug,
+                candles=[],
+                indicators=[],
+                trades=[],
+                message="No data available for the specified period",
+            )
+
+        # Limit candles if needed
+        if len(historical_data) > limit:
+            historical_data = historical_data[-limit:]
+
+        # Convert to candle objects
+        candles = [
+            ChartHistoricalCandle(
+                timestamp=candle.get("timestamp"),
+                open=float(candle.get("open", 0)),
+                high=float(candle.get("high", 0)),
+                low=float(candle.get("low", 0)),
+                close=float(candle.get("close", 0)),
+                volume=int(candle.get("volume", 0)),
+            )
+            for candle in historical_data
+        ]
+
+        # Load strategy class dynamically
+        try:
+            module = importlib.import_module(strategy_model.module_path)
+            strategy_class = getattr(module, strategy_model.class_name)
+        except (ImportError, AttributeError) as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to load strategy class: {str(e)}",
+            )
+
+        # Calculate indicators using user's config params
+        config_params = subscription.config_params or {}
+        indicators_data = calculate_indicators_for_strategy(
+            strategy_class=strategy_class,
+            candles=[
+                {
+                    "timestamp": c.timestamp.isoformat(),
+                    "close": c.close,
+                }
+                for c in candles
+            ],
+            config_params=config_params,
+        )
+
+        # Convert indicator dictionaries to ChartIndicator instances
+        indicators = [ChartIndicator(**indicator) for indicator in indicators_data]
+
+        # Fetch historical trades for this subscription and symbol
+        # We need both entry and exit orders
+        trades_result = await db.execute(
+            select(Trade, Order)
+            .join(Order, Trade.entry_order_id == Order.id)
+            .where(
+                Trade.subscription_id == subscription.id,
+                Trade.symbol == symbol.upper(),
+                Trade.entry_time >= datetime.combine(from_date, datetime.min.time()),
+                Trade.entry_time <= datetime.combine(to_date, datetime.max.time()),
+            )
+            .order_by(Trade.entry_time)
+        )
+        trade_data = trades_result.all()
+
+        # Build trade markers
+        trade_markers = []
+
+        for trade, entry_order in trade_data:
+            # Entry marker
+            trade_markers.append(TradeMarker(
+                time=trade.entry_time,
+                price=float(trade.entry_price),
+                type="entry",
+                side="buy" if trade.side == "LONG" else "sell",
+                quantity=trade.quantity,
+                pnl=None,
+                pnl_percent=None,
+                order_id=str(entry_order.id),
+                trade_id=str(trade.id),
+            ))
+
+            # Exit marker (if trade is closed)
+            if trade.status == "closed" and trade.exit_time and trade.exit_price:
+                # Fetch exit order
+                exit_order_result = await db.execute(
+                    select(Order).where(Order.id == trade.exit_order_id)
+                )
+                exit_order = exit_order_result.scalar_one_or_none()
+
+                trade_markers.append(TradeMarker(
+                    time=trade.exit_time,
+                    price=float(trade.exit_price),
+                    type="exit",
+                    side="sell" if trade.side == "LONG" else "buy",
+                    quantity=trade.quantity,
+                    pnl=float(trade.pnl) if trade.pnl else None,
+                    pnl_percent=float(trade.pnl_percent) if trade.pnl_percent else None,
+                    order_id=str(exit_order.id) if exit_order else "",
+                    trade_id=str(trade.id),
+                ))
+
+        return ChartDataResponse(
+            symbol=symbol.upper(),
+            exchange=exchange.upper(),
+            interval=interval,
+            strategy_name=strategy_model.name,
+            strategy_slug=strategy_model.slug,
+            candles=candles,
+            indicators=indicators,
+            trades=trade_markers,
+        )
+
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        import traceback
+        error_details = f"Failed to fetch chart data: {str(e)}\n{traceback.format_exc()}"
+        print(error_details)  # Log to console
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to fetch chart data: {str(e)}",
+        )

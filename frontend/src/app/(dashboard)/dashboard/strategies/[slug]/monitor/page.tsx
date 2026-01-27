@@ -20,11 +20,13 @@ import {
   Settings,
   Wifi,
   WifiOff,
+  LineChart,
 } from 'lucide-react'
 import { strategyApi, portfolioApi } from '@/lib/api'
 import { formatCurrency, formatPercent, cn } from '@/lib/utils'
 import { useStrategyWebSocket } from '@/hooks/useStrategyWebSocket'
 import type { StrategySubscription, Strategy } from '@/types/strategy'
+import { ChartModal } from './components/ChartModal'
 
 interface Position {
   id: string
@@ -59,6 +61,8 @@ export default function StrategyMonitorPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isActionLoading, setIsActionLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isChartModalOpen, setIsChartModalOpen] = useState(false)
+  const [selectedChartSymbol, setSelectedChartSymbol] = useState<string>('')
 
   // WebSocket for real-time updates
   const wsState = useStrategyWebSocket({
@@ -335,12 +339,22 @@ export default function StrategyMonitorPage() {
           <h3 className="font-medium mb-3">Trading Symbols</h3>
           <div className="flex flex-wrap gap-2">
             {subscription.selected_symbols.map(symbol => (
-              <span
+              <div
                 key={symbol}
-                className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg text-sm font-medium"
+                className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg text-sm font-medium"
               >
-                {symbol}
-              </span>
+                <span>{symbol}</span>
+                <button
+                  onClick={() => {
+                    setSelectedChartSymbol(symbol)
+                    setIsChartModalOpen(true)
+                  }}
+                  className="ml-1 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+                  title={`View ${symbol} chart`}
+                >
+                  <LineChart className="h-4 w-4 text-primary" />
+                </button>
+              </div>
             ))}
           </div>
         </div>
@@ -522,6 +536,16 @@ export default function StrategyMonitorPage() {
           </div>
         </div>
       )}
+
+      {/* Chart Modal */}
+      <ChartModal
+        isOpen={isChartModalOpen}
+        onClose={() => setIsChartModalOpen(false)}
+        symbol={selectedChartSymbol}
+        subscriptionId={subscription.id}
+        availableSymbols={subscription.selected_symbols || []}
+        strategyTimeframe={strategy?.timeframe || '15min'}
+      />
     </div>
   )
 }

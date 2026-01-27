@@ -108,3 +108,62 @@ class ReportRequest(BaseModel):
     format: str = Field(default="csv", pattern="^(csv|pdf)$")
     include_trades: bool = True
     include_orders: bool = False
+
+
+class OrderLogResponse(BaseModel):
+    """Response schema for OrderLog entries."""
+    id: UUID
+    subscription_id: UUID
+    order_id: Optional[UUID]
+    symbol: str
+    exchange: str
+    order_type: str
+    transaction_type: str
+    quantity: int
+    price: Optional[Decimal]
+    trigger_price: Optional[Decimal]
+    event_type: str  # generated, dry_run, submitted, placed, filled, rejected, failed
+    is_dry_run: bool
+    is_test_order: bool
+    success: Optional[bool]
+    broker_order_id: Optional[str]
+    broker_name: Optional[str]
+    broker_request: Optional[dict]
+    broker_response: Optional[dict]
+    error_message: Optional[str]
+    strategy_name: Optional[str]
+    reason: Optional[str]
+    market_price: Optional[Decimal]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class OrderLogListResponse(BaseModel):
+    """Paginated list of order logs."""
+    logs: List[OrderLogResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class BrokerTestOrderRequest(BaseModel):
+    """Request to place a test order with broker."""
+    broker_connection_id: UUID
+    symbol: str = Field(default="RELIANCE", description="Symbol to trade")
+    exchange: str = Field(default="NSE", description="Exchange")
+    quantity: int = Field(default=1, ge=1, le=10, description="Test quantity (1-10)")
+    order_type: str = Field(default="LIMIT", pattern="^(MARKET|LIMIT)$")
+    transaction_type: str = Field(default="BUY", pattern="^(BUY|SELL)$")
+    price: Optional[Decimal] = Field(default=None, description="Price for LIMIT orders")
+
+
+class BrokerTestOrderResponse(BaseModel):
+    """Response from broker test order."""
+    success: bool
+    message: str
+    order_log_id: Optional[UUID] = None
+    broker_order_id: Optional[str] = None
+    broker_response: Optional[dict] = None
+    error: Optional[str] = None

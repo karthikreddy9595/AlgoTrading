@@ -208,20 +208,24 @@ async def subscribe_to_strategy(
             detail=f"Minimum capital required is {strategy.min_capital}",
         )
 
-    # Check if already subscribed
+    # Check if already subscribed with the same symbols
+    # Note: Users can subscribe to the same strategy multiple times with different symbols
     result = await db.execute(
         select(StrategySubscription).where(
             StrategySubscription.user_id == current_user.id,
             StrategySubscription.strategy_id == subscription_data.strategy_id,
         )
     )
-    existing = result.scalar_one_or_none()
+    existing_subscriptions = result.scalars().all()
 
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Already subscribed to this strategy",
-        )
+    # Check if any existing subscription has the exact same set of symbols
+    selected_symbols_set = set(subscription_data.selected_symbols)
+    for existing in existing_subscriptions:
+        if existing.selected_symbols and set(existing.selected_symbols) == selected_symbols_set:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Already subscribed to this strategy with the same symbols: {', '.join(sorted(selected_symbols_set))}",
+            )
 
     # Verify broker connection if provided
     if subscription_data.broker_connection_id:
@@ -445,6 +449,7 @@ async def subscription_action(
                         "daily_loss_limit": float(subscription.daily_loss_limit or 0),
                         "per_trade_sl_percent": float(subscription.per_trade_stop_loss_percent),
                         "is_paper_trading": subscription.is_paper_trading,
+                        "dry_run": subscription.dry_run,
                     },
                     "risk_limits": {
                         "max_drawdown_percent": float(subscription.max_drawdown_percent),
@@ -454,6 +459,7 @@ async def subscription_action(
                     },
                     "config_params": subscription.config_params or {},
                     "symbols": subscription.selected_symbols or [],
+                    "dry_run": subscription.dry_run,
                 }
 
                 success = await engine.start_strategy(

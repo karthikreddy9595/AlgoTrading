@@ -5,9 +5,11 @@ WebSocket endpoint for real-time market data.
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import Optional, Set, Dict, List
+from typing import Optional, Set, Dict, List, Tuple
 import asyncio
 import json
+from datetime import datetime, timedelta
+from decimal import Decimal
 
 from app.core.database import get_db
 from app.core.security import decode_access_token
@@ -78,8 +80,145 @@ class MarketDataHub:
         return self.subscribed_symbols.copy()
 
 
+class CandleAggregator:
+    """
+    Aggregates quote updates into candles for real-time chart updates.
+
+    Maintains current candles for each symbol-interval pair and broadcasts
+    completed candles when intervals close.
+    """
+
+    # Interval to minutes mapping
+    INTERVAL_MINUTES = {
+        "1min": 1,
+        "5min": 5,
+        "15min": 15,
+        "30min": 30,
+        "1hour": 60,
+        "1day": 1440,
+    }
+
+    def __init__(self):
+        # Current candles: (symbol, interval) -> candle_data
+        self.current_candles: Dict[Tuple[str, str], dict] = {}
+
+        # Last broadcast time for partial updates: (symbol, interval) -> timestamp
+        self.last_broadcast: Dict[Tuple[str, str], datetime] = {}
+
+        # Broadcast partial updates every N seconds
+        self.partial_update_interval = 5
+
+    def _get_candle_start_time(self, timestamp: datetime, interval: str) -> datetime:
+        """Calculate the start time of the candle for a given timestamp."""
+        minutes = self.INTERVAL_MINUTES.get(interval, 5)
+
+        if interval == "1day":
+            # Round to start of day
+            return datetime(timestamp.year, timestamp.month, timestamp.day)
+        else:
+            # Round down to nearest interval
+            total_minutes = timestamp.hour * 60 + timestamp.minute
+            candle_minutes = (total_minutes // minutes) * minutes
+            hours = candle_minutes // 60
+            mins = candle_minutes % 60
+            return datetime(
+                timestamp.year, timestamp.month, timestamp.day,
+                hours, mins, 0, 0
+            )
+
+    async def process_quote(self, symbol: str, interval: str, quote_data: dict):
+        """
+        Process a quote update and update the current candle.
+
+        Args:
+            symbol: Trading symbol
+            interval: Candle interval
+            quote_data: Quote data with ltp, timestamp, etc.
+
+        Returns:
+            Tuple of (completed_candle, should_broadcast_partial)
+        """
+        key = (symbol, interval)
+
+        # Extract price and timestamp
+        ltp = quote_data.get("ltp")
+        if not ltp:
+            return None, False
+
+        # Parse timestamp
+        timestamp_str = quote_data.get("timestamp")
+        if timestamp_str:
+            try:
+                if isinstance(timestamp_str, str):
+                    timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                else:
+                    timestamp = timestamp_str
+            except:
+                timestamp = datetime.utcnow()
+        else:
+            timestamp = datetime.utcnow()
+
+        # Get candle start time
+        candle_start = self._get_candle_start_time(timestamp, interval)
+
+        # Check if we have a current candle
+        current = self.current_candles.get(key)
+
+        # Determine if we need to complete the previous candle
+        completed_candle = None
+        if current and current["timestamp"] != candle_start:
+            # Previous candle is complete
+            completed_candle = current.copy()
+            current = None
+
+        # Create new candle or update existing
+        if not current:
+            # Start new candle
+            volume = int(quote_data.get("volume", 0))
+            self.current_candles[key] = {
+                "timestamp": candle_start,
+                "open": float(ltp),
+                "high": float(ltp),
+                "low": float(ltp),
+                "close": float(ltp),
+                "volume": volume,
+                "last_update": timestamp,
+            }
+        else:
+            # Update existing candle
+            current["high"] = max(current["high"], float(ltp))
+            current["low"] = min(current["low"], float(ltp))
+            current["close"] = float(ltp)
+            current["volume"] = int(quote_data.get("volume", current["volume"]))
+            current["last_update"] = timestamp
+
+        # Check if we should broadcast a partial update
+        should_broadcast = False
+        last_broadcast_time = self.last_broadcast.get(key)
+        if not last_broadcast_time or \
+           (timestamp - last_broadcast_time).total_seconds() >= self.partial_update_interval:
+            should_broadcast = True
+            self.last_broadcast[key] = timestamp
+
+        return completed_candle, should_broadcast
+
+    def get_current_candle(self, symbol: str, interval: str) -> Optional[dict]:
+        """Get the current candle for a symbol-interval pair."""
+        return self.current_candles.get((symbol, interval))
+
+    def clear_symbol(self, symbol: str):
+        """Clear all candles for a symbol."""
+        keys_to_remove = [k for k in self.current_candles.keys() if k[0] == symbol]
+        for key in keys_to_remove:
+            self.current_candles.pop(key, None)
+            self.last_broadcast.pop(key, None)
+
+
 # Global market data hub
 market_hub = MarketDataHub()
+
+# Global candle aggregator
+candle_aggregator = CandleAggregator()
 
 
 async def get_user_from_token(token: str) -> Optional[str]:
@@ -165,6 +304,18 @@ async def handle_market_message(websocket: WebSocket, data: dict):
         symbols = data.get("symbols", [])
         await unsubscribe_symbols(websocket, symbols)
 
+    elif msg_type == "subscribe_candles":
+        # Subscribe to candle updates for symbols with specific intervals
+        symbols = data.get("symbols", [])
+        interval = data.get("interval", "5min")
+        await subscribe_candles(websocket, symbols, interval)
+
+    elif msg_type == "unsubscribe_candles":
+        # Unsubscribe from candle updates
+        symbols = data.get("symbols", [])
+        interval = data.get("interval", "5min")
+        await unsubscribe_candles(websocket, symbols, interval)
+
     elif msg_type == "get_quote":
         symbol = data.get("symbol")
         if symbol:
@@ -179,6 +330,25 @@ async def handle_market_message(websocket: WebSocket, data: dict):
                 await websocket.send_json({
                     "type": "error",
                     "message": f"No data available for {symbol}"
+                })
+
+    elif msg_type == "get_current_candle":
+        # Get current candle for a symbol-interval pair
+        symbol = data.get("symbol")
+        interval = data.get("interval", "5min")
+        if symbol:
+            candle = candle_aggregator.get_current_candle(symbol, interval)
+            if candle:
+                await websocket.send_json({
+                    "type": "candle",
+                    "symbol": symbol,
+                    "interval": interval,
+                    "data": candle
+                })
+            else:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": f"No candle data available for {symbol} @ {interval}"
                 })
 
     elif msg_type == "get_indices":
@@ -234,6 +404,65 @@ async def unsubscribe_symbols(websocket: WebSocket, symbols: list):
     await websocket.send_json({
         "type": "unsubscribed",
         "symbols": unsubscribed
+    })
+
+
+async def subscribe_candles(websocket: WebSocket, symbols: list, interval: str):
+    """
+    Subscribe to candle updates for symbols.
+
+    This subscribes to both quote updates (for candle aggregation) and
+    a dedicated candles topic for receiving candle completion notifications.
+    """
+    subscribed = []
+
+    for symbol in symbols:
+        # Subscribe to quote topic (for candle building)
+        quote_topic = f"market:{symbol}"
+        await manager.subscribe_to_topic(websocket, quote_topic)
+        market_hub.add_symbol(symbol)
+
+        # Subscribe to candles topic for this symbol-interval pair
+        candle_topic = f"candles:{symbol}:{interval}"
+        await manager.subscribe_to_topic(websocket, candle_topic)
+
+        subscribed.append(symbol)
+
+        # Send current candle if available
+        current_candle = candle_aggregator.get_current_candle(symbol, interval)
+        if current_candle:
+            await websocket.send_json({
+                "type": "candle",
+                "symbol": symbol,
+                "interval": interval,
+                "data": current_candle,
+                "is_partial": True
+            })
+
+    await websocket.send_json({
+        "type": "candles_subscribed",
+        "symbols": subscribed,
+        "interval": interval
+    })
+
+
+async def unsubscribe_candles(websocket: WebSocket, symbols: list, interval: str):
+    """Unsubscribe from candle updates for symbols."""
+    unsubscribed = []
+
+    for symbol in symbols:
+        # Unsubscribe from candles topic
+        candle_topic = f"candles:{symbol}:{interval}"
+        await manager.unsubscribe_from_topic(websocket, candle_topic)
+        unsubscribed.append(symbol)
+
+        # Also unsubscribe from quotes if no other candle subscriptions exist
+        # (This is simplified - in production, you'd track active subscriptions)
+
+    await websocket.send_json({
+        "type": "candles_unsubscribed",
+        "symbols": unsubscribed,
+        "interval": interval
     })
 
 
@@ -325,4 +554,60 @@ async def broadcast_all_indices(indices_data: Dict[str, dict]):
     await manager.broadcast_to_topic(INDICES_TOPIC, {
         "type": "indices",
         "data": indices_data
+    })
+
+
+async def broadcast_quote_with_candles(symbol: str, quote_data: dict, intervals: List[str] = None):
+    """
+    Broadcast a market quote and update candles for all intervals.
+
+    This is an enhanced version of broadcast_quote that also handles candle
+    aggregation for real-time chart updates.
+
+    Args:
+        symbol: Trading symbol
+        quote_data: Quote data with ltp, timestamp, etc.
+        intervals: List of intervals to aggregate (default: all supported)
+    """
+    # First, do the normal quote broadcast
+    await broadcast_quote(symbol, quote_data)
+
+    # Then, aggregate into candles for each interval
+    if intervals is None:
+        intervals = ["1min", "5min", "15min", "30min", "1hour"]
+
+    for interval in intervals:
+        # Process quote and check for candle completion
+        completed_candle, should_broadcast = await candle_aggregator.process_quote(
+            symbol, interval, quote_data
+        )
+
+        # If candle completed, broadcast it
+        if completed_candle:
+            await broadcast_candle(symbol, interval, completed_candle, is_partial=False)
+
+        # If partial update needed, broadcast current candle
+        elif should_broadcast:
+            current_candle = candle_aggregator.get_current_candle(symbol, interval)
+            if current_candle:
+                await broadcast_candle(symbol, interval, current_candle, is_partial=True)
+
+
+async def broadcast_candle(symbol: str, interval: str, candle_data: dict, is_partial: bool = False):
+    """
+    Broadcast a candle update to all subscribers.
+
+    Args:
+        symbol: Trading symbol
+        interval: Candle interval
+        candle_data: Candle OHLCV data
+        is_partial: Whether this is a partial update (current candle) or completed
+    """
+    topic = f"candles:{symbol}:{interval}"
+    await manager.broadcast_to_topic(topic, {
+        "type": "candle",
+        "symbol": symbol,
+        "interval": interval,
+        "data": candle_data,
+        "is_partial": is_partial
     })

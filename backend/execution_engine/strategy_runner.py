@@ -38,12 +38,14 @@ class StrategyRunner:
         strategy_class: type,
         context: StrategyContext,
         risk_limits: RiskLimits,
+        dry_run: bool = False,
     ):
         self.subscription_id = subscription_id
         self.user_id = user_id
         self.strategy_class = strategy_class
         self.context = context
         self.risk_limits = risk_limits
+        self.dry_run = dry_run
 
         self.process: Optional[Process] = None
         self.command_queue: Queue = Queue()
@@ -66,6 +68,7 @@ class StrategyRunner:
                 self.strategy_class,
                 self.context,
                 self.risk_limits,
+                self.dry_run,
                 self.command_queue,
                 self.result_queue,
                 self.market_data_queue,
@@ -159,6 +162,7 @@ class StrategyRunner:
         strategy_class: type,
         context: StrategyContext,
         risk_limits: RiskLimits,
+        dry_run: bool,
         command_queue: Queue,
         result_queue: Queue,
         market_data_queue: Queue,
@@ -284,6 +288,7 @@ class StrategyRunner:
                                     "reason": order.reason,
                                 },
                                 "subscription_id": subscription_id,
+                                "is_dry_run": dry_run,
                             })
                             today_trade_count += 1
                         else:

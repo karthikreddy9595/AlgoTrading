@@ -84,6 +84,7 @@ class StrategySupervisor:
         context_data: dict,
         risk_limits_data: dict,
         symbols: List[str],
+        dry_run: bool = False,
     ) -> bool:
         """
         Start a strategy for a subscription.
@@ -143,6 +144,7 @@ class StrategySupervisor:
                 strategy_class=cls,
                 context=context,
                 risk_limits=risk_limits,
+                dry_run=dry_run,
             )
 
             # Start runner
