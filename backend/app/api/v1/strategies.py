@@ -9,6 +9,8 @@ from app.core.database import get_db
 from app.core.execution import get_execution_engine, is_engine_initialized
 from app.api.deps import get_current_user
 from app.models import User, Strategy, StrategySubscription, BrokerConnection
+from brokers.factory import BrokerFactory
+from app.core.config import settings
 from app.schemas import (
     StrategyListResponse,
     StrategyResponse,
@@ -436,6 +438,40 @@ async def subscription_action(
         if engine_available:
             try:
                 engine = get_execution_engine()
+
+                # Connect broker to execution engine for market data
+                broker_result = await db.execute(
+                    select(BrokerConnection).where(
+                        BrokerConnection.user_id == current_user.id,
+                        BrokerConnection.is_active == True,
+                    )
+                )
+                broker_connection = broker_result.scalar_one_or_none()
+
+                if broker_connection and not engine.broker:
+                    try:
+                        # Get broker config
+                        broker_config = {
+                            "fyers": {
+                                "app_id": settings.FYERS_APP_ID,
+                                "secret_key": settings.FYERS_SECRET_KEY,
+                            },
+                        }.get(broker_connection.broker, {})
+
+                        # Create and connect broker
+                        broker = await BrokerFactory.create_and_connect(
+                            broker_connection.broker,
+                            {
+                                "api_key": broker_connection.api_key,
+                                "api_secret": broker_connection.api_secret,
+                                "access_token": broker_connection.access_token,
+                                "client_id": broker_config.get("app_id") or broker_connection.api_key,
+                            },
+                        )
+                        engine.broker = broker
+                    except Exception as e:
+                        print(f"Failed to connect broker for market data: {e}")
+                        # Continue without market data - strategy can still run
 
                 # Build config for execution engine
                 config = {

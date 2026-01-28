@@ -37,7 +37,7 @@ class PaperTradingBroker(BaseBroker):
         # Simulated market prices
         self._prices: Dict[str, Decimal] = {
             "NSE:NIFTY50-INDEX": Decimal("22500"),
-            "NSE:BANKNIFTY-INDEX": Decimal("48000"),
+            "NSE:NIFTYBANK-INDEX": Decimal("48000"),
             "NSE:RELIANCE": Decimal("2800"),
             "NSE:TCS": Decimal("3900"),
             "NSE:INFY": Decimal("1450"),

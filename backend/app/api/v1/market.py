@@ -16,6 +16,7 @@ from app.api.deps import get_current_user
 from app.models import User, BrokerConnection, StrategySubscription, Order, Trade, Strategy
 from brokers.factory import BrokerFactory
 from app.core.config import settings
+from app.api.websocket.market_data import broadcast_all_indices, market_hub
 from app.schemas.market import (
     ChartDataResponse,
     ChartIndicator,
@@ -222,6 +223,27 @@ async def get_market_indices(
                 ))
 
         await broker.disconnect()
+
+        # Broadcast indices to WebSocket clients
+        try:
+            indices_data = {}
+            for idx in updated_indices:
+                indices_data[idx.symbol] = {
+                    "symbol": idx.symbol,
+                    "display_name": idx.display_name,
+                    "ltp": idx.ltp,
+                    "change": idx.change,
+                    "change_percent": idx.change_percent,
+                    "open": idx.open,
+                    "high": idx.high,
+                    "low": idx.low,
+                    "prev_close": idx.prev_close,
+                    "timestamp": idx.timestamp,
+                }
+            await broadcast_all_indices(indices_data)
+        except Exception as e:
+            # Don't fail the REST response if WebSocket broadcast fails
+            print(f"Failed to broadcast indices to WebSocket: {e}")
 
         return IndicesResponse(
             connected=True,

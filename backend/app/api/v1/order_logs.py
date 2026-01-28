@@ -165,6 +165,11 @@ async def test_broker_order(
         # Get broker config
         config = _get_broker_config(connection.broker)
 
+        # Log the attempt
+        print(f"[TEST ORDER] Broker: {connection.broker}, User: {current_user.email}")
+        print(f"[TEST ORDER] Token expiry: {connection.token_expiry}")
+        print(f"[TEST ORDER] Token valid: {connection.token_expiry > datetime.utcnow() if connection.token_expiry else 'Unknown'}")
+
         # Create broker instance
         broker = await BrokerFactory.create_and_connect(
             connection.broker,
@@ -192,8 +197,12 @@ async def test_broker_order(
             "price": price,
         }
 
+        print(f"[TEST ORDER] Placing order: {order_request}")
+
         # Place test order
         result = await broker.place_order(**order_request)
+
+        print(f"[TEST ORDER] Order placed successfully: {result}")
 
         await broker.disconnect()
 

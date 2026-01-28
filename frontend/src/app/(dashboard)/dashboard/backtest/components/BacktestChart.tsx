@@ -75,6 +75,26 @@ export function BacktestChart({ backtestId, symbol }: BacktestChartProps) {
     const AreaSeries = chartLib.AreaSeries
     const LineSeries = chartLib.LineSeries
 
+    // IST timezone offset in seconds (UTC+5:30 = 5.5 hours = 19800 seconds)
+    const IST_OFFSET_SECONDS = 5.5 * 60 * 60
+
+    // Format time in IST
+    const formatTimeIST = (timestamp: number) => {
+      const date = new Date((timestamp + IST_OFFSET_SECONDS) * 1000)
+      const hours = date.getUTCHours().toString().padStart(2, '0')
+      const minutes = date.getUTCMinutes().toString().padStart(2, '0')
+      return `${hours}:${minutes}`
+    }
+
+    // Format date in IST
+    const formatDateIST = (timestamp: number) => {
+      const date = new Date((timestamp + IST_OFFSET_SECONDS) * 1000)
+      const day = date.getUTCDate().toString().padStart(2, '0')
+      const month = (date.getUTCMonth() + 1).toString().padStart(2, '0')
+      const year = date.getUTCFullYear()
+      return `${day}/${month}/${year}`
+    }
+
     const chart = createChart(chartContainerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
@@ -94,6 +114,10 @@ export function BacktestChart({ backtestId, symbol }: BacktestChartProps) {
         borderColor: 'rgba(55, 65, 81, 0.5)',
         timeVisible: true,
         secondsVisible: false,
+      },
+      localization: {
+        timeFormatter: (timestamp: number) => formatTimeIST(timestamp),
+        dateFormatter: (timestamp: number) => formatDateIST(timestamp),
       },
       handleScroll: {
         vertTouchDrag: false,
@@ -271,6 +295,10 @@ export function BacktestChart({ backtestId, symbol }: BacktestChartProps) {
             borderColor: 'rgba(55, 65, 81, 0.5)',
             visible: false,
           },
+          localization: {
+            timeFormatter: (timestamp: number) => formatTimeIST(timestamp),
+            dateFormatter: (timestamp: number) => formatDateIST(timestamp),
+          },
           height: 150,
         })
 
@@ -333,6 +361,10 @@ export function BacktestChart({ backtestId, symbol }: BacktestChartProps) {
           timeScale: {
             borderColor: 'rgba(55, 65, 81, 0.5)',
             visible: false,
+          },
+          localization: {
+            timeFormatter: (timestamp: number) => formatTimeIST(timestamp),
+            dateFormatter: (timestamp: number) => formatDateIST(timestamp),
           },
           height: 150,
         })

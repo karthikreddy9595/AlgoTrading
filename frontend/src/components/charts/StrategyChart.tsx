@@ -149,6 +149,26 @@ export function StrategyChart({
 
     const { createChart, ColorType, CrosshairMode } = chartLib
 
+    // IST timezone offset in seconds (UTC+5:30 = 5.5 hours = 19800 seconds)
+    const IST_OFFSET_SECONDS = 5.5 * 60 * 60
+
+    // Format time in IST
+    const formatTimeIST = (timestamp: number) => {
+      const date = new Date((timestamp + IST_OFFSET_SECONDS) * 1000)
+      const hours = date.getUTCHours().toString().padStart(2, '0')
+      const minutes = date.getUTCMinutes().toString().padStart(2, '0')
+      return `${hours}:${minutes}`
+    }
+
+    // Format date in IST
+    const formatDateIST = (timestamp: number) => {
+      const date = new Date((timestamp + IST_OFFSET_SECONDS) * 1000)
+      const day = date.getUTCDate().toString().padStart(2, '0')
+      const month = (date.getUTCMonth() + 1).toString().padStart(2, '0')
+      const year = date.getUTCFullYear()
+      return `${day}/${month}/${year}`
+    }
+
     // Create main price chart
     const chart = createChart(chartContainerRef.current, {
       layout: {
@@ -169,6 +189,10 @@ export function StrategyChart({
         borderColor: 'rgba(55, 65, 81, 0.5)',
         timeVisible: true,
         secondsVisible: false,
+      },
+      localization: {
+        timeFormatter: (timestamp: number) => formatTimeIST(timestamp),
+        dateFormatter: (timestamp: number) => formatDateIST(timestamp),
       },
       handleScroll: {
         vertTouchDrag: false,
@@ -319,6 +343,10 @@ export function StrategyChart({
         timeScale: {
           borderColor: 'rgba(55, 65, 81, 0.5)',
           visible: false,
+        },
+        localization: {
+          timeFormatter: (timestamp: number) => formatTimeIST(timestamp),
+          dateFormatter: (timestamp: number) => formatDateIST(timestamp),
         },
         height: 150,
       })

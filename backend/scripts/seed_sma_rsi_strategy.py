@@ -91,7 +91,7 @@ This strategy combines two popular technical indicators for higher-quality tradi
             timeframe="15min",
             supported_symbols=[
                 "NSE:NIFTY50-INDEX",
-                "NSE:BANKNIFTY-INDEX",
+                "NSE:NIFTYBANK-INDEX",
                 "NSE:RELIANCE",
                 "NSE:TCS",
                 "NSE:INFY",

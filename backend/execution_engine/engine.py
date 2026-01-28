@@ -15,6 +15,7 @@ from execution_engine.supervisor import StrategySupervisor
 from execution_engine.kill_switch import KillSwitch
 from brokers.base import BaseBroker, MarketQuote
 from strategies.base import MarketData
+from app.api.websocket.market_data import broadcast_quote_with_candles
 
 
 class ExecutionEngine:
@@ -110,16 +111,28 @@ class ExecutionEngine:
         if not self._supervisor:
             return False
 
-        return await self._supervisor.start_strategy(
+        symbols = config.get("symbols", [])
+
+        result = await self._supervisor.start_strategy(
             subscription_id=subscription_id,
             user_id=user_id,
             strategy_module=strategy_module,
             strategy_class=strategy_class,
             context_data=config.get("context", {}),
             risk_limits_data=config.get("risk_limits", {}),
-            symbols=config.get("symbols", []),
+            symbols=symbols,
             dry_run=config.get("dry_run", False),
         )
+
+        # If strategy started successfully, subscribe to market data for its symbols
+        if result and symbols and self.broker and self.broker.is_connected:
+            try:
+                await self.start_market_data(symbols)
+            except Exception as e:
+                print(f"Failed to start market data for {subscription_id}: {e}")
+                # Don't fail strategy start if market data subscription fails
+
+        return result
 
     async def stop_strategy(self, subscription_id: str) -> bool:
         """Stop a running strategy."""
@@ -293,6 +306,26 @@ class ExecutionEngine:
             # Distribute to strategies
             if self._supervisor:
                 self._supervisor.distribute_market_data(data)
+
+            # Broadcast to WebSocket clients for live chart updates
+            # Format symbol as EXCHANGE:SYMBOL for WebSocket topic matching
+            ws_symbol = f"{quote.exchange}:{quote.symbol}" if hasattr(quote, 'exchange') else quote.symbol
+            quote_data = {
+                "ltp": float(quote.ltp) if quote.ltp else 0,
+                "open": float(quote.open) if quote.open else 0,
+                "high": float(quote.high) if quote.high else 0,
+                "low": float(quote.low) if quote.low else 0,
+                "close": float(quote.close) if quote.close else 0,
+                "volume": int(quote.volume) if quote.volume else 0,
+                "timestamp": quote.timestamp.isoformat() if quote.timestamp else None,
+                "bid": float(quote.bid) if quote.bid else 0,
+                "ask": float(quote.ask) if quote.ask else 0,
+            }
+            try:
+                await broadcast_quote_with_candles(ws_symbol, quote_data)
+            except Exception as e:
+                # Don't fail market data flow if WebSocket broadcast fails
+                print(f"WebSocket broadcast error: {e}")
 
         await self.broker.subscribe_market_data(symbols, on_quote)
 

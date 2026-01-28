@@ -30,7 +30,7 @@ class SimpleMovingAverageCrossover(BaseStrategy):
     version = "1.0.0"
     author = "Platform"
     min_capital = Decimal("10000")
-    supported_symbols = ["NSE:NIFTY50-INDEX", "NSE:BANKNIFTY-INDEX", "NSE:RELIANCE", "NSE:TCS"]
+    supported_symbols = ["NSE:NIFTY50-INDEX", "NSE:NIFTYBANK-INDEX", "NSE:RELIANCE", "NSE:TCS"]
     timeframe = "5min"
 
     def __init__(self, context: StrategyContext):
@@ -181,7 +181,7 @@ class RSIMomentum(BaseStrategy):
     version = "1.0.0"
     author = "Platform"
     min_capital = Decimal("10000")
-    supported_symbols = ["NSE:NIFTY50-INDEX", "NSE:BANKNIFTY-INDEX"]
+    supported_symbols = ["NSE:NIFTY50-INDEX", "NSE:NIFTYBANK-INDEX"]
     timeframe = "15min"
 
     def __init__(self, context: StrategyContext):

@@ -191,6 +191,46 @@ class FyersBroker(BaseBroker):
             "Content-Type": "application/json",
         }
 
+    def _format_symbol(self, symbol: str, exchange: str) -> str:
+        """
+        Format symbol according to Fyers symbology.
+
+        Segments and formats:
+        - Equity: {Ex}:{Symbol}-{Series} (e.g., NSE:SBIN-EQ, BSE:ACC-A)
+        - Index: {Ex}:{Symbol}-INDEX (e.g., NSE:NIFTY50-INDEX)
+        - Futures: {Ex}:{Symbol}{YY}{MMM}FUT (e.g., NSE:NIFTY20OCTFUT)
+        - Options: {Ex}:{Symbol}{YY}{MMM}{Strike}{CE/PE} (e.g., NSE:NIFTY20OCT11000CE)
+        - Currency: {Ex}:{Pair}{YY}{MMM}FUT (e.g., NSE:USDINR20OCTFUT)
+        - Commodity: {Ex}:{Commodity}{YY}{MMM}FUT (e.g., MCX:CRUDEOIL20OCTFUT)
+        """
+        symbol_upper = symbol.upper()
+
+        # Check if symbol is an index (ends with -INDEX)
+        if symbol_upper.endswith('-INDEX'):
+            return f"{exchange}:{symbol}"
+
+        # Check if symbol already has equity series suffix (e.g., -EQ, -BE, -A, -T)
+        if '-' in symbol and any(symbol_upper.endswith(f'-{s}') for s in ['EQ', 'BE', 'A', 'T', 'B', 'N']):
+            return f"{exchange}:{symbol}"
+
+        # Check if symbol is a derivative (ends with FUT, CE, or PE with digits before)
+        # Futures end with FUT (e.g., NIFTY20OCTFUT)
+        if symbol_upper.endswith('FUT'):
+            return f"{exchange}:{symbol}"
+
+        # Options end with CE or PE preceded by strike price digits (e.g., NIFTY20OCT11000CE)
+        if (symbol_upper.endswith('CE') or symbol_upper.endswith('PE')) and len(symbol) > 2:
+            # Check if there's a digit before CE/PE (indicating it's an option, not a stock like RELIANCE)
+            if symbol[-3].isdigit():
+                return f"{exchange}:{symbol}"
+
+        # For NSE/BSE equity, append -EQ suffix
+        if exchange.upper() in ["NSE", "BSE"]:
+            return f"{exchange}:{symbol}-EQ"
+
+        # For other exchanges (MCX, CDS, etc.), use symbol as-is
+        return f"{exchange}:{symbol}"
+
     # ==================== BaseBroker Implementation ====================
 
     async def connect(self, credentials: BrokerCredentials) -> bool:
@@ -272,11 +312,13 @@ class FyersBroker(BaseBroker):
         session = await self._get_session()
 
         # Map order type to Fyers format
+        # type 1 = Limit, type 2 = Market, type 3 = Stop (SL-M), type 4 = Stop Limit (SL-L)
         order_type_map = {
-            "MARKET": 2,
             "LIMIT": 1,
+            "MARKET": 2,
             "SL": 3,
-            "SL-M": 4,
+            "SL-M": 3,
+            "SL-L": 4,
         }
 
         # Map product type
@@ -288,8 +330,9 @@ class FyersBroker(BaseBroker):
             "BO": "BO",
         }
 
-        # Construct Fyers symbol format
-        fyers_symbol = f"{exchange}:{symbol}"
+        # Construct Fyers symbol format based on segment
+        # Uses denormalize_symbol to handle equity suffix (-EQ) and other formats
+        fyers_symbol = self._format_symbol(symbol, exchange)
 
         payload = {
             "symbol": fyers_symbol,
@@ -302,16 +345,43 @@ class FyersBroker(BaseBroker):
             "validity": "DAY",
             "disclosedQty": 0,
             "offlineOrder": False,
+            "stopLoss": 0,
+            "takeProfit": 0,
+            "isSliceOrder": False,
         }
 
         async with session.post(
-            f"{self.BASE_URL}/orders",
+            f"{self.BASE_URL}/orders/sync",
             json=payload,
             headers=self._get_headers(),
         ) as response:
-            data = await response.json()
+            # Check response content type
+            content_type = response.headers.get('Content-Type', '')
 
-            status = OrderStatus.PLACED if data.get("s") == "ok" else OrderStatus.REJECTED
+            if 'text/plain' in content_type or 'text/html' in content_type:
+                # API returned plain text, likely an error
+                text_response = await response.text()
+                raise Exception(
+                    f"Fyers API returned text response (status {response.status}): {text_response}. "
+                    f"This usually indicates authentication or permission issues. "
+                    f"Please verify your Fyers access token is valid and has trading permissions."
+                )
+
+            try:
+                data = await response.json()
+            except Exception as e:
+                text_response = await response.text()
+                raise Exception(
+                    f"Failed to parse Fyers API response as JSON: {str(e)}. "
+                    f"Response (status {response.status}): {text_response}"
+                )
+
+            # Check if order was successful
+            if data.get("s") != "ok":
+                error_msg = data.get("message", "Unknown error")
+                raise Exception(f"Fyers order failed: {error_msg}")
+
+            status = OrderStatus.PLACED
 
             return BrokerOrder(
                 order_id=data.get("id", ""),
@@ -458,7 +528,7 @@ class FyersBroker(BaseBroker):
         """Get current market quote."""
         session = await self._get_session()
 
-        fyers_symbol = f"{exchange}:{symbol}"
+        fyers_symbol = self._format_symbol(symbol, exchange)
 
         async with session.get(
             f"{self.DATA_URL}/quotes",
@@ -555,7 +625,11 @@ class FyersBroker(BaseBroker):
                 timestamp=datetime.utcnow(),
             )
 
-            self._market_data_callback(quote)
+            # Handle both sync and async callbacks
+            if asyncio.iscoroutinefunction(self._market_data_callback):
+                await self._market_data_callback(quote)
+            else:
+                self._market_data_callback(quote)
 
     async def unsubscribe_market_data(self, symbols: List[str]) -> None:
         """Unsubscribe from market data."""

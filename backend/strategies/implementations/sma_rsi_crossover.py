@@ -53,7 +53,7 @@ class SMARSICrossover(BaseStrategy):
     # Support both formats: with and without exchange prefix
     supported_symbols = [
         "NIFTY50-INDEX", "NSE:NIFTY50-INDEX",
-        "BANKNIFTY-INDEX", "NSE:BANKNIFTY-INDEX",
+        "NIFTYBANK-INDEX", "NSE:NIFTYBANK-INDEX",
         "RELIANCE", "NSE:RELIANCE",
         "TCS", "NSE:TCS",
         "INFY", "NSE:INFY",

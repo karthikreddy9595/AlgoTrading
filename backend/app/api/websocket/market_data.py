@@ -21,7 +21,7 @@ router = APIRouter()
 # Index symbols for auto-subscription
 INDEX_SYMBOLS = {
     "NIFTY50": {"symbol": "NSE:NIFTY50-INDEX", "display_name": "NIFTY 50"},
-    "BANKNIFTY": {"symbol": "NSE:NIFTY BANK-INDEX", "display_name": "BANK NIFTY"},
+    "BANKNIFTY": {"symbol": "NSE:NIFTYBANK-INDEX", "display_name": "BANK NIFTY"},
     "SENSEX": {"symbol": "BSE:SENSEX-INDEX", "display_name": "SENSEX"},
     "BANKEX": {"symbol": "BSE:BANKEX-INDEX", "display_name": "BANKEX"},
 }
