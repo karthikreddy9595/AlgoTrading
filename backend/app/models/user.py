@@ -29,6 +29,7 @@ class User(Base):
     user_subscription = relationship("UserSubscription", back_populates="user", uselist=False)
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
     notification_preferences = relationship("NotificationPreference", back_populates="user", uselist=False)
+    payment_transactions = relationship("PaymentTransaction", back_populates="user", cascade="all, delete-orphan")
 
 
 class OAuthAccount(Base):

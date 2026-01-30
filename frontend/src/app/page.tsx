@@ -37,6 +37,9 @@ export default function LandingPage() {
             <Link href="/about" className="text-sm text-gray-600 hover:text-purple-600 transition-colors">
               About
             </Link>
+            <Link href="/pricing" className="text-sm text-gray-600 hover:text-purple-600 transition-colors">
+              Pricing
+            </Link>
             <Link href="/blog" className="text-sm text-gray-600 hover:text-purple-600 transition-colors">
               Blog
             </Link>
@@ -469,6 +472,7 @@ export default function LandingPage() {
               <h3 className="font-semibold text-gray-900 mb-4">Product</h3>
               <ul className="space-y-3 text-gray-600">
                 <li><Link href="/about" className="hover:text-purple-600 transition-colors">About Us</Link></li>
+                <li><Link href="/pricing" className="hover:text-purple-600 transition-colors">Pricing</Link></li>
                 <li><Link href="/blog" className="hover:text-purple-600 transition-colors">Blog</Link></li>
                 <li><Link href="/register" className="hover:text-purple-600 transition-colors">Get Started</Link></li>
                 <li><Link href="/login" className="hover:text-purple-600 transition-colors">Login</Link></li>

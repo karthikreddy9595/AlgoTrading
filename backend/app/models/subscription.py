@@ -7,6 +7,48 @@ import uuid
 from app.core.database import Base
 
 
+class PaymentTransaction(Base):
+    __tablename__ = "payment_transactions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_subscription_id = Column(UUID(as_uuid=True), ForeignKey("user_subscriptions.id", ondelete="SET NULL"), nullable=True)
+    plan_id = Column(UUID(as_uuid=True), ForeignKey("subscription_plans.id", ondelete="SET NULL"), nullable=True)
+
+    # Razorpay identifiers
+    razorpay_order_id = Column(String(255), nullable=True)
+    razorpay_payment_id = Column(String(255), nullable=True)
+    razorpay_signature = Column(String(512), nullable=True)
+
+    # Transaction details
+    amount = Column(Numeric(10, 2), nullable=False)
+    currency = Column(String(3), default="INR", nullable=False)
+    status = Column(String(20), nullable=False)  # pending, completed, failed, refunded
+    payment_method = Column(String(50), nullable=True)  # card, upi, netbanking, wallet
+
+    # Billing info
+    billing_cycle = Column(String(20), nullable=True)  # monthly, yearly
+    billing_start = Column(DateTime, nullable=True)
+    billing_end = Column(DateTime, nullable=True)
+
+    # Metadata
+    description = Column(String(500), nullable=True)
+    payment_metadata = Column(JSONB, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+    # Idempotency
+    idempotency_key = Column(String(255), nullable=True, unique=True)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="payment_transactions")
+    user_subscription = relationship("UserSubscription", back_populates="payment_transactions")
+    plan = relationship("SubscriptionPlan")
+
+
 class SubscriptionPlan(Base):
     __tablename__ = "subscription_plans"
 
@@ -40,9 +82,18 @@ class UserSubscription(Base):
     payment_id = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    # Razorpay integration fields
+    razorpay_subscription_id = Column(String(255), nullable=True)
+    razorpay_customer_id = Column(String(255), nullable=True)
+    billing_cycle = Column(String(20), default="monthly")  # monthly, yearly
+    auto_renew = Column(Boolean, default=True)
+    cancelled_at = Column(DateTime, nullable=True)
+    next_billing_date = Column(DateTime, nullable=True)
+
     # Relationships
     user = relationship("User", back_populates="user_subscription")
     plan = relationship("SubscriptionPlan", back_populates="user_subscriptions")
+    payment_transactions = relationship("PaymentTransaction", back_populates="user_subscription")
 
 
 class StrategySubscription(Base):

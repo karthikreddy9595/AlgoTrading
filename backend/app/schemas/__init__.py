@@ -84,6 +84,26 @@ from app.schemas.blog import (
     BlogPostBulkResult,
     ImageUploadResponse,
 )
+from app.schemas.payment import (
+    PlanType,
+    BillingCycle,
+    PaymentStatus,
+    SubscriptionStatus,
+    SubscriptionPlanResponse,
+    PlanListResponse,
+    CreateCheckoutRequest,
+    CreateCheckoutResponse,
+    VerifyPaymentRequest,
+    VerifyPaymentResponse,
+    UserSubscriptionResponse,
+    CancelSubscriptionRequest,
+    CancelSubscriptionResponse,
+    PaymentTransactionResponse,
+    PaymentHistoryResponse,
+    RazorpayWebhookPayload,
+    ActivateFreeRequest,
+    ActivateFreeResponse,
+)
 
 __all__ = [
     # User schemas
@@ -166,4 +186,23 @@ __all__ = [
     "BlogPostBulkUpload",
     "BlogPostBulkResult",
     "ImageUploadResponse",
+    # Payment schemas
+    "PlanType",
+    "BillingCycle",
+    "PaymentStatus",
+    "SubscriptionStatus",
+    "SubscriptionPlanResponse",
+    "PlanListResponse",
+    "CreateCheckoutRequest",
+    "CreateCheckoutResponse",
+    "VerifyPaymentRequest",
+    "VerifyPaymentResponse",
+    "UserSubscriptionResponse",
+    "CancelSubscriptionRequest",
+    "CancelSubscriptionResponse",
+    "PaymentTransactionResponse",
+    "PaymentHistoryResponse",
+    "RazorpayWebhookPayload",
+    "ActivateFreeRequest",
+    "ActivateFreeResponse",
 ]

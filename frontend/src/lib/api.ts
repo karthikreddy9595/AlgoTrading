@@ -141,6 +141,7 @@ export const strategyApi = {
     broker_connection_id?: string
     capital_allocated: number
     is_paper_trading: boolean
+    dry_run?: boolean
     max_drawdown_percent?: number
     daily_loss_limit?: number
     per_trade_stop_loss_percent?: number
@@ -879,6 +880,62 @@ export const orderLogsApi = {
     price?: number
   }) => {
     const response = await api.post('/order-logs/test-broker-order', data)
+    return response.data
+  },
+}
+
+// Payment API
+export const paymentApi = {
+  // Get all subscription plans (public endpoint)
+  getPlans: async () => {
+    const response = await api.get('/payments/plans')
+    return response.data
+  },
+
+  // Get user's current subscription
+  getSubscription: async () => {
+    const response = await api.get('/payments/subscription')
+    return response.data
+  },
+
+  // Create checkout order for Razorpay
+  createCheckout: async (data: {
+    plan_id: string
+    billing_cycle: 'monthly' | 'yearly'
+    idempotency_key?: string
+  }) => {
+    const response = await api.post('/payments/checkout', data)
+    return response.data
+  },
+
+  // Verify payment and activate subscription
+  verifyPayment: async (data: {
+    razorpay_order_id: string
+    razorpay_payment_id: string
+    razorpay_signature: string
+  }) => {
+    const response = await api.post('/payments/verify', data)
+    return response.data
+  },
+
+  // Activate free plan
+  activateFree: async () => {
+    const response = await api.post('/payments/activate-free')
+    return response.data
+  },
+
+  // Cancel subscription
+  cancelSubscription: async (data?: {
+    cancel_immediately?: boolean
+    reason?: string
+  }) => {
+    const response = await api.post('/payments/subscription/cancel', data || {})
+    return response.data
+  },
+
+  // Get payment history
+  getHistory: async (params?: { page?: number; page_size?: number }) => {
+    const response = await api.get('/payments/history', { params })
     return response.data
   },
 }

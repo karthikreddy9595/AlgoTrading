@@ -493,7 +493,6 @@ export function StrategyDetailsModal({
                             <StrategyChart
                               symbol={selectedChartSymbol}
                               subscriptionId={subscription.id}
-                              timeframe={strategy.timeframe}
                               height={500}
                             />
                           </div>

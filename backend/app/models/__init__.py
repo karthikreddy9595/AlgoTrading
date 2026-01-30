@@ -1,6 +1,6 @@
 from app.models.user import User, OAuthAccount, BrokerConnection
 from app.models.strategy import Strategy, StrategyVersion
-from app.models.subscription import SubscriptionPlan, UserSubscription, StrategySubscription
+from app.models.subscription import SubscriptionPlan, UserSubscription, StrategySubscription, PaymentTransaction
 from app.models.order import Position, Order, OrderLog
 from app.models.trade import Trade
 from app.models.notification import Notification, NotificationPreference, AuditLog
@@ -17,6 +17,7 @@ __all__ = [
     "SubscriptionPlan",
     "UserSubscription",
     "StrategySubscription",
+    "PaymentTransaction",
     "Position",
     "Order",
     "OrderLog",

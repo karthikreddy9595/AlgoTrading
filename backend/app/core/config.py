@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     TWILIO_AUTH_TOKEN: Optional[str] = None
     TWILIO_FROM_NUMBER: Optional[str] = None
 
+    # Razorpay Payment Gateway
+    RAZORPAY_KEY_ID: Optional[str] = None
+    RAZORPAY_KEY_SECRET: Optional[str] = None
+    RAZORPAY_WEBHOOK_SECRET: Optional[str] = None
+
     # Trading
     MIN_CAPITAL: float = 10000.0
     DEFAULT_MAX_DRAWDOWN_PERCENT: float = 10.0

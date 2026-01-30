@@ -47,6 +47,9 @@ dependencies = [
     "sendgrid>=6.11.0",
     "aiosmtplib>=3.0.1",
 
+    # Payment Gateway
+    "razorpay>=1.4.1",
+
     # Reports
     "reportlab>=4.0.9",
     "pandas>=2.2.0",
